@@ -3,9 +3,17 @@ import botocore
 import os
 import logging
 import json
+
+# Configure logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 import requests
 from langchain.llms.bedrock import Bedrock
-from langchain.embeddings import BedrockEmbeddings
+import time
+
+# Configure logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 from langchain.vectorstores import OpenSearchVectorSearch
 from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain.prompts import PromptTemplate
@@ -26,7 +34,7 @@ def download_file_from_s3(bucket, key):
         content = response['Body'].read()
         return content
     except botocore.exceptions.ClientError as e:
-        print(f"Error downloading file: {e}")
+        logger.error(f"Error downloading file: {e}")
         raise
 
 def parse_json_metadata(json_content):
@@ -57,7 +65,7 @@ def parse_json_metadata(json_content):
         
         # Return both formatted text and the raw dictionary
         return {
-            'formatted_text': formatted_metadata,
+        logger.error(f"Error parsing JSON metadata: {e}")
             'raw_data': data # Return the original parsed data dictionary
         }
     except Exception as e:

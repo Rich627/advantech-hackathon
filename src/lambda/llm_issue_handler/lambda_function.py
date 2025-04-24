@@ -4,6 +4,12 @@ import os
 import logging
 import json
 import requests
+from langchain.llms.bedrock import Bedrock
+from langchain.embeddings import BedrockEmbeddings
+from langchain.vectorstores import OpenSearchVectorSearch
+from langchain.chains.retrieval_qa.base import RetrievalQA
+from langchain.prompts import PromptTemplate
+import time
 
 def download_file_from_s3(bucket, key):
     """
@@ -23,90 +29,139 @@ def download_file_from_s3(bucket, key):
         print(f"Error downloading file: {e}")
         raise
 
-def get_embedding(content):
+def parse_json_metadata(json_content):
     """
-    Get embedding for the provided content
+    Parse JSON metadata to extract specific fields
     Parameters:
-        content: Content to get embedding for
+        json_content: JSON content as string or bytes
     Returns:
-        List of floats representing the embedding
-    """
-    # Placeholder for actual embedding logic
-    # This should be replaced with the actual implementation
-    return [0.0] * 768  # Example: 768-dimensional embedding
-
-def vdb_query(metadata):
-    """
-    Query VDB with the provided metadata
-    Parameters:
-        metadata: Metadata to query VDB
-    Returns:
-        Response from VDB query
+        Formatted string with extracted fields
     """
     try:
-        # 取得 embedding（此處假設你有 embedding function）
-        embedding = get_embedding(metadata)  # List[float] 長度需與 index 維度相符
+        if isinstance(json_content, bytes):
+            json_content = json_content.decode('utf-8')
         
-        try:
-            opensearch_url = os.environ['OPENSEARCH_ENDPOINT']
-            headers = {"Content-Type": "application/json"}
-            query_body = {
-                "size": 1,
-                "query": {
-                    "knn": {
-                        "embedding": {
-                            "vector": embedding,
-                            "k": 1
-                        }
-                    }
-                }
-            }
-
-            vdb_resp = requests.post(
-                f"{opensearch_url}/icam-vectors/_search",
-                headers=headers,
-                data=json.dumps(query_body)
-            )
-
-            if vdb_resp.status_code == 200:
-                hits = vdb_resp.json().get("hits", {}).get("hits", [])
-                kb_result = hits[0]['_source']['description'] if hits else "無相關紀錄"
-                return kb_result
-        except requests.exceptions.RequestException as e:
-            print(f"Error querying VDB: {e}")
-            return "Search failed in VDB"
+        data = json.loads(json_content)
+        
+        # Extract the specific fields based on user-provided example
+        issue_id = data.get('id', f"issue_{int(time.time())}") # Use provided id, fallback to generating one
+        timestamp = data.get('timestamp', 'N/A') # Get timestamp string
+        length = data.get('length', 'N/A')
+        width = data.get('width', 'N/A')
+        position = data.get('position', 'N/A')
+        material = data.get('Material', 'N/A')
+        crack_location = data.get('crack_location', 'N/A')
+        
+        # Format the metadata string for RAG input (as before, or adjust as needed)
+        formatted_metadata = f"Issue ID: {issue_id}, Timestamp: {timestamp}, Length: {length}, Width: {width}, Position: {position}, Material: {material}, Crack Location: {crack_location}"
+        
+        # Return both formatted text and the raw dictionary
+        return {
+            'formatted_text': formatted_metadata,
+            'raw_data': data # Return the original parsed data dictionary
+        }
     except Exception as e:
-        print(f"Error in getting embeddings: {e}")
-        return "Could not get embedding"
+        print(f"Error parsing JSON metadata: {e}")
+        raise
 
-def call_bedrock_model(metadata):
+def initialize_rag_chain():
     """
-    Call Bedrock model with the provided metadata
-    Parameters:
-        metadata: Metadata to send to the Bedrock model
+    Initialize the RAG chain using Langchain with Bedrock components
     Returns:
-        Response from the Bedrock model
+        Configured RAG chain
     """
-    # Retrieve related knowledge base from VDB
-    kb_result = vdb_query(metadata)
-    
-    # Call Bedrock model with the knowledge base
     try:
-        bedrock_client = boto3.client('bedrock')
-        response = bedrock_client.invoke_model(
-            modelId=os.environ['BEDROCK_MODEL_ID'],
-            contentType='application/json',
-            accept='application/json',
-            body=json.dumps({"input": metadata, "knowledge_base": kb_result})
+        # Initialize Bedrock client
+        bedrock_client = boto3.client('bedrock-runtime')
+        
+        # Initialize Claude LLM
+        llm = Bedrock(
+            client=bedrock_client,
+            model_id=os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-sonnet-20240229-v1:0'),
+            model_kwargs={"temperature": 0.1, "max_tokens_to_sample": 2000}
         )
-        return response['body'].read()
-    except botocore.exceptions.ClientError as e:
-        print(f"Error calling Bedrock model: {e}")
-        return "Model invocation failed"
+        
+        # Initialize Bedrock embeddings
+        embeddings = BedrockEmbeddings(
+            client=bedrock_client,
+            model_id=os.environ.get('BEDROCK_EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v1')
+        )
+        
+        # Initialize OpenSearch vector store
+        opensearch_url = os.environ.get('OPENSEARCH_ENDPOINT')
+        vectorstore = OpenSearchVectorSearch(
+            opensearch_url=opensearch_url,
+            index_name="icam-vectors",
+            embedding_function=embeddings
+        )
+        
+        # Create prompt template
+        prompt_template = """
+        You are an expert system for analyzing manufacturing issues.
+        
+        Context information from knowledge base:
+        {context}
+        
+        Question: {question}
+        
+        Analyze the information provided and generate a detailed solution for the issue.
+        """
+        
+        PROMPT = PromptTemplate(
+            template=prompt_template,
+            input_variables=["context", "question"]
+        )
+        
+        # Create QA chain
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=llm,
+            chain_type="stuff",
+            retriever=vectorstore.as_retriever(search_kwargs={"k": 3}),
+            chain_type_kwargs={"prompt": PROMPT}
+        )
+        
+        return qa_chain
+    except Exception as e:
+        print(f"Error initializing RAG chain: {e}")
+        raise
+
+def store_in_dynamodb(issue_data, solution):
+    """
+    Store issue data and solution in DynamoDB
+    Parameters:
+        issue_data: Dict containing issue data
+        solution: Solution generated by the model
+    """
+    try:
+        dynamodb = boto3.resource('dynamodb')
+        table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE', 'report'))
+        
+        # Create item to store in DynamoDB using data from parsed JSON
+        item = {
+            'id': issue_data.get('id', f"issue_{int(time.time())}"), # Use ID from JSON
+            'timestamp': issue_data.get('timestamp', 'N/A'), # Use timestamp string from JSON
+            'processing_timestamp': int(time.time()), # Add current processing time
+            'length': issue_data.get('length', 'N/A'),
+            'width': issue_data.get('width', 'N/A'),
+            'position': issue_data.get('position', 'N/A'),
+            'material': issue_data.get('Material', 'N/A'),
+            'crack_location': issue_data.get('crack_location', 'N/A'),
+            'solution': solution,
+            # Add other raw data fields if needed
+        }
+        
+        # Store item in DynamoDB
+        table.put_item(Item=item)
+        
+        return True
+    except Exception as e:
+        print(f"Error storing data in DynamoDB: {e}")
+        return False
 
 def lambda_handler(event, context):
     """
-    When new image & icam metadata stored in s3, this lambda will be triggered to call bedrock model for generating solution with knowledge base.
+    When new folder with image & JSON metadata is created in S3, this lambda will be triggered
+    to call Bedrock model for generating solution with knowledge base using Langchain RAG.
     Parameters:
         event: Dict containing the Lambda function event data
         context: Lambda runtime context
@@ -114,34 +169,63 @@ def lambda_handler(event, context):
         Dict containing status message
     """
     try:
-        # get message from event trigger by s3
+        # Get message from event triggered by S3
         record = event['Records'][0]
         bucket = record['s3']['bucket']['name']
         key = record['s3']['object']['key']
-        metadata = download_file_from_s3(bucket, key)
-        solution = call_bedrock_model(metadata)
         
-        # Notify SNS with the solution by invoking another lambda function
-        lambda_client = boto3.client('lambda')
-        payload = {
-            'solution': solution,
-            'metadata': metadata.decode('utf-8') if isinstance(metadata, bytes) else metadata,
-            'source': {
-                'bucket': bucket,
-                'key': key
+        # Check if the key matches the expected pattern: issues/issue_{timestamp}/metadata.json
+        # Example: issues/issue_2023-10-27 10:00:00/metadata.json
+        # Basic check: starts with 'issues/', ends with '/metadata.json'
+        if key.startswith('issues/') and key.endswith('/metadata.json'):
+            print(f"Processing metadata file: {key}")
+            
+            # Download and parse JSON metadata
+            json_content = download_file_from_s3(bucket, key)
+            parsed_data = parse_json_metadata(json_content)
+            formatted_metadata = parsed_data['formatted_text']
+            raw_data = parsed_data['raw_data'] # Get the raw dictionary
+            
+            # Initialize and run RAG chain
+            rag_chain = initialize_rag_chain()
+            # Use the formatted metadata string as the question/input for the RAG chain
+            # Ensure the prompt template handles this structure correctly.
+            # The current prompt expects a "question". We are passing the formatted metadata.
+            # Consider adjusting the prompt or how the input is passed if needed.
+            # For now, passing formatted_metadata as the "question".
+            solution = rag_chain.run(formatted_metadata) 
+            
+            # Store in DynamoDB using the raw data extracted from JSON
+            store_in_dynamodb(raw_data, solution)
+            
+            # Notify SNS with the solution by invoking another lambda function
+            lambda_client = boto3.client('lambda')
+            payload = {
+                'solution': solution,
+                'metadata': formatted_metadata,
+                'source': {
+                    'bucket': bucket,
+                    'key': key
+                }
             }
-        }
-        
-        lambda_client.invoke(
-            FunctionName='notification_lambda_function_name',  # 替換為目標 Lambda 函數的名稱
-            InvocationType='Event',  # 'Event'為非同步呼叫，'RequestResponse'為同步呼叫
-            Payload=json.dumps(payload)
-        )
-        
-        return {
-            'statusCode': 200,
-            'body': 'Notification sent successfully'
-        }
+            
+            lambda_client.invoke(
+                FunctionName=os.environ.get('NOTIFICATION_LAMBDA', 'notification_lambda_function_name'),
+                InvocationType='Event',
+                Payload=json.dumps(payload)
+            )
+            
+            return {
+                'statusCode': 200,
+                'body': 'Analysis completed and notification sent successfully'
+            }
+        else:
+            # Log and skip if the key doesn't match the expected pattern or isn't metadata.json
+            print(f"Skipping non-matching or non-metadata file: {key}")
+            return {
+                'statusCode': 200,
+                'body': f"Skipped file: {key}"
+            }
     except Exception as e:
         print(f"Error in lambda_handler: {e}")
         return {

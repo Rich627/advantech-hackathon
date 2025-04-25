@@ -17,3 +17,9 @@ provider "aws" {
 }
 
 provider "random" {}
+
+provider "opensearch" {
+  url       = aws_opensearchserverless_collection.vdb_collection.collection_endpoint
+  aws_sigv4 = true          # Serverless 一定要 SigV4
+  region    = var.aws_region
+}

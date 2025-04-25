@@ -116,3 +116,139 @@ resource "aws_lambda_function" "presigned_url" {
     }
   }
 }
+
+
+#######################################
+######### Lambda role #################
+#######################################
+
+# For Lambda functions to access AWS services, we need to create an IAM role with the necessary permissions.
+resource "aws_iam_role" "lambda_exec" {
+  name = "lambda_exec_role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+      Effect = "Allow"
+      Sid    = ""
+    }]
+  })
+
+  tags = {
+    Name = "lambda-exec-role"
+    Project = "equipment-management"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# for invoke sns topic
+resource "aws_iam_policy" "lambda_sns_publish" {
+  name        = "lambda_sns_publish"
+  description = "Allow Lambda functions to publish messages to SNS"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = [
+          "sns:Publish",
+          "sns:Subscribe",
+          "sns:ListSubscriptionsByTopic"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_sns_attachment" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.lambda_sns_publish.arn
+}
+
+# for invoke bedrock
+resource "aws_iam_policy" "lambda_bedrock_access" {
+  name        = "lambda_bedrock_access"
+  description = "Allow Lambda functions to access Bedrock models"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+          "bedrock:GetModelCustomizationJob",
+          "bedrock:CreateModelCustomizationJob"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_bedrock_attachment" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.lambda_bedrock_access.arn
+}
+
+# for invoke lambda
+resource "aws_iam_policy" "lambda_invoke_policy" {
+  name        = "lambda_invoke_policy"
+  description = "Allow Lambda functions to invoke each other"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = [
+          "lambda:InvokeFunction",
+          "lambda:InvokeAsync"
+        ],
+        Resource = [
+          aws_lambda_function.llm_advise_handler.arn,
+          aws_lambda_function.doc_process.arn,
+          aws_lambda_function.util.arn,
+          aws_lambda_function.sns_notfication.arn,
+          aws_lambda_function.ingest_data.arn,
+          aws_lambda_function.render_frontend.arn,
+          aws_lambda_function.complete.arn,
+          aws_lambda_function.presigned_url.arn
+        ]
+      }
+    ]
+  })
+
+  depends_on = [
+    aws_lambda_function.llm_advise_handler,
+    aws_lambda_function.doc_process,
+    aws_lambda_function.util,
+    aws_lambda_function.sns_notfication,
+    aws_lambda_function.ingest_data,
+    aws_lambda_function.render_frontend,
+    aws_lambda_function.complete,
+    aws_lambda_function.presigned_url
+  ]
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_invoke_attachment" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.lambda_invoke_policy.arn
+}
+
+# for cloudwatch logs
+resource "aws_iam_role_policy_attachment" "lambda_logs_attachment" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+}

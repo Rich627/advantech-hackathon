@@ -10,6 +10,11 @@ resource "aws_cloudfront_distribution" "main" {
   origin {
     domain_name = replace(aws_apigatewayv2_api.main.api_endpoint, "https://", "")
     origin_id   = "ApiGateway"
+
+    custom_header {
+        name  = "x-api-gateway-auth"
+        value = "icam-540"  # should be same as the one in WAF rule
+    }
     
     custom_origin_config {
       http_port              = 80

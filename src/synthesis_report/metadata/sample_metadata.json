@@ -1,0 +1,12 @@
+{
+  "report_id": "REP-2024-001",
+  "location": "隧道A段",
+  "crack_type": "Longitudinal",
+  "length_cm": 150,
+  "depth_cm": 2,
+  "engineer": "張工程師",
+  "date": "2024-04-25",
+  "action": "灌漿修補",
+  "status": "已完成",
+  "description": "發現縱向裂縫，立即進行灌漿修補。修補後進行強度測試，確認修復效果良好。"
+}

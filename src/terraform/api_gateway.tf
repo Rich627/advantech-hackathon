@@ -10,7 +10,10 @@ resource "aws_apigatewayv2_stage" "default" {
   auto_deploy = true
 }
 
-# API Gateway integrations
+######################################################
+######### API Gateway integration and routes #########
+######################################################
+
 resource "aws_apigatewayv2_integration" "render_frontend" {
   api_id           = aws_apigatewayv2_api.main.id
   integration_type = "AWS_PROXY"
@@ -35,7 +38,16 @@ resource "aws_apigatewayv2_integration" "doc_process" {
   integration_method = "POST"
 }
 
-# API Gateway routes
+resource "aws_apigatewayv2_integration" "presigned_url" {
+  api_id           = aws_apigatewayv2_api.main.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = aws_lambda_function.presigned_url.invoke_arn
+  integration_method = "POST"
+}
+
+#################################################
+########## API Gateway routes ###################
+#################################################
 resource "aws_apigatewayv2_route" "render_frontend" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "GET /render"
@@ -54,7 +66,16 @@ resource "aws_apigatewayv2_route" "doc_process" {
   target    = "integrations/${aws_apigatewayv2_integration.doc_process.id}"
 }
 
-# Lambda permissions for API Gateway
+resource "aws_apigatewayv2_route" "presigned_url" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /presigned"
+  target    = "integrations/${aws_apigatewayv2_integration.presigned_url.id}"
+}
+
+
+#################################################
+##### Lambda permissions for API Gateway #######
+#################################################
 resource "aws_lambda_permission" "render_frontend" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
@@ -78,3 +99,11 @@ resource "aws_lambda_permission" "doc_process" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
 } 
+
+resource "aws_lambda_permission" "presigned_url" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.presigned_url.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}

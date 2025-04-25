@@ -1,17 +1,31 @@
-# S3 Lambda 觸發測試環境
+# 裂縫檢測系統測試環境
 
-這個資料夾包含用於測試 S3 事件觸發 Lambda 函數的腳本和結構。
+這個資料夾包含用於測試裂縫檢測系統的資料上傳和處理流程。
+
+## 元數據格式
+
+裂縫元數據 (metadata.json) 格式如下：
+
+```json
+{
+  "id": "ISSUE-001", // 問題ID範圍: ISSUE-001 ~ ISSUE-999
+  "location": "A1", // 位置代碼
+  "crack_type": "Longitudinal", // 裂縫類型: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
+  "length_cm": 150, // 長度範圍: 0 ~ 9999 公分
+  "depth_cm": 2, // 深度範圍: 0 ~ 9999 公分
+  "date": "2025-05-13", // 日期格式: YYYY-MM-DD
+  "image_url": "https://s3.amazonaws.com/xxx/image/ISSUE-001.jpg" // 圖片URL
+}
+```
 
 ## 資料夾結構
-
-測試環境模擬了 S3 儲存桶的結構：
 
 ```
 test/
 ├── issues/
-│   ├── issue_{timestamp}/
-│   │   ├── metadata.json     # 裂縫資訊
-│   │   └── image.jpg         # 圖片檔案
+│   ├── ISSUE-XXX/
+│   │   ├── ISSUE-XXX.json     # 裂縫資訊
+│   │   └── ISSUE-XXX.jpg     # 圖片檔案
 ```
 
 ## 使用方法

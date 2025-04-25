@@ -5,3 +5,4 @@ src/terraform/.terraform/
 */terraform/terraform.tfstate
 */lambda/awscliv2.zip
 */terraform/terraform.tfstate.backup
+.DS_Store

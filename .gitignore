@@ -1,0 +1,7 @@
+*/lambda/aws/
+src/terraform/.terraform/
+
+*/terraform/.terraform.lock.hcl
+*/terraform/terraform.tfstate
+*/lambda/awscliv2.zip
+*/terraform/terraform.tfstate.backup

@@ -13,6 +13,26 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
   depends_on = [aws_lambda_permission.allow_s3]
 }
 
+resource "aws_s3_bucket_notification" "pdf_trigger" {
+  bucket = aws_s3_bucket.image_bucket.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.pdf_ingest.arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_suffix       = ".pdf"
+  }
+
+  depends_on = [aws_lambda_permission.allow_s3_pdf]
+}
+
+resource "aws_lambda_permission" "allow_s3_pdf" {
+  statement_id  = "AllowExecutionFromS3PDF"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.pdf_ingest.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.image_bucket.arn
+}
+
 resource "aws_lambda_function" "llm_issue_handler" {
   function_name = "analyze_with_llm"
   package_type  = "Image"
@@ -70,6 +90,24 @@ resource "aws_lambda_function" "daily_report_handler" {
       OPENSEARCH_REGION = var.aws_region
     }
   }
+}
+
+resource "aws_lambda_function" "pdf_ingest" {
+  function_name = "pdf_ingest_handler"
+  package_type  = "Image"
+  image_uri     = "${var.ecr_repository_url}/pdf_ingest_handler:latest"
+  role          = aws_iam_role.lambda_exec.arn   # 使用共用執行角色
+  timeout       = 60
+  memory_size   = 1024
+
+  environment {
+    variables = {
+      OS_ENDPOINT = aws_opensearchserverless_collection.vdb_collection.collection_endpoint
+      AWS_REGION  = var.aws_region
+    }
+  }
+
+  # 如果 OpenSearch Serverless 在 VPC Subnet，這裡再補 vpc_config
 }
 
 resource "aws_iam_role" "lambda_exec" {
@@ -200,6 +238,14 @@ resource "aws_lambda_permission" "allow_s3" {
   statement_id  = "AllowExecutionFromS3"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.llm_issue_handler.function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = aws_s3_bucket.image_bucket.arn
+}
+
+resource "aws_lambda_permission" "allow_s3_pdf" {
+  statement_id  = "AllowExecutionFromS3PDF"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.pdf_ingest.function_name
   principal     = "s3.amazonaws.com"
   source_arn    = aws_s3_bucket.image_bucket.arn
 }

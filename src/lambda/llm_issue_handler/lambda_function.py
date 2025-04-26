@@ -49,18 +49,21 @@ def parse_json_metadata(json_content):
         data = json.loads(json_content)
         
         # Extract all relevant fields from metadata JSON
-        issue_id = data.get('id', f"ISSUE-{int(time.time())}")
-        date = data.get('date', time.strftime('%Y-%m-%d'))
-        location = data.get('location', 'A1')
+        issue_id = data.get('id', f"issue_{int(time.time())}")
+        timestamp = data.get('timestamp', time.strftime('%Y-%m-%d'))
+        length = data.get('length', 0)
+        width = data.get('width')
+        # depth = data.get('width', 0)
+        position = data.get('position', 'mountain')
+        material = data.get('material', 'concrete')
         crack_type = data.get('crack_type', 'Longitudinal')
-        length_cm = data.get('length_cm', 0)
-        depth_cm = data.get('depth_cm', 0)
+        crack_location = data.get('crack_location', 'A')
         image_url = data.get('image_url', '')
         
         # Format the metadata string for RAG input
         formatted_metadata = (
-            f"Issue ID: {issue_id}, Date: {date}, Location: {location}, "
-            f"Crack Type: {crack_type}, Length (cm): {length_cm}, Depth (cm): {depth_cm}"
+            f"Issue ID: {issue_id}, Timestamp: {timestamp}, Location: {position}, Material: {material}, "
+            f"Crack Type: {crack_type}, Length (cm): {length}, Width (cm): {width}"
         )
         
         # Return both formatted text for RAG and raw data for DynamoDB
@@ -150,11 +153,9 @@ def validate_and_format_data(issue_data, solution):
         # 從AI回應中提取風險等級和處理建議
         solution_text = solution if isinstance(solution, str) else json.dumps(solution)
         
-        # 嘗試從回應中提取風險等級 (僅當metadata中沒有提供時)
+        # 嘗試從回應中提取風險等級
         ai_risk_level = None
-        # 檢查風險評估關鍵詞
         if "風險評估" in solution_text:
-            # 尋找風險等級關鍵詞
             if "High" in solution_text or "高風險" in solution_text or "高" in solution_text and "風險" in solution_text:
                 ai_risk_level = "High"
             elif "Medium" in solution_text or "中風險" in solution_text or "中" in solution_text and "風險" in solution_text:
@@ -162,17 +163,14 @@ def validate_and_format_data(issue_data, solution):
             elif "Low" in solution_text or "低風險" in solution_text or "低" in solution_text and "風險" in solution_text:
                 ai_risk_level = "Low"
         
-        # 從AI回應中提取處理建議 (僅當metadata中沒有提供時)
+        # 從AI回應中提取處理建議
         ai_action = None
-        # 尋找建議處理方式部分
         if "建議處理方式" in solution_text:
             try:
-                # 從"建議處理方式"後面提取文字直到下一行或句號
                 action_section = solution_text.split("建議處理方式")[1].strip()
                 if action_section.startswith("：") or action_section.startswith(":"):
                     action_section = action_section[1:].strip()
                 
-                # 提取第一個完整句子或段落
                 end_markers = ["\n", "。", ".", "，", ","]
                 for marker in end_markers:
                     if marker in action_section:
@@ -180,149 +178,122 @@ def validate_and_format_data(issue_data, solution):
                         break
                 
                 if action_section:
-                    ai_action = action_section[:100]  # 限制長度
+                    ai_action = action_section[:200]  # 增加允許長度
             except:
-                # 無法解析時的備用方案
-                # 尋找可能的關鍵詞
                 for keyword in ["修復", "處理", "建議", "修補", "灌漿", "更換", "加固"]:
                     if keyword in solution_text:
-                        # 找到關鍵詞所在的句子
                         sentences = solution_text.split("。")
                         for sentence in sentences:
                             if keyword in sentence:
-                                ai_action = sentence.strip()[:100]
+                                ai_action = sentence.strip()[:200]
                                 break
                         if ai_action:
                             break
         
-        # 使用S3 key作為issue_id (而不是從metadata的id欄位)
+        # 使用 S3 key作為issue_id (移除路徑和副檔名)
         issue_id = issue_data.get('s3_key', '')
         if not issue_id or issue_id == "":
-            # 作為備用，使用metadata中的report_id (轉換為issue_id)
             issue_id = issue_data.get('report_id', issue_data.get('id', ''))
             if not issue_id:
-                # 如果都沒有，生成隨機ID
-                random_id = int(time.time()) % 999 + 1
-                issue_id = f"ISSUE-{random_id:03d}"
+                # 生成隨機ID
+                timestamp = time.strftime('%Y_%m_%d_%H_%M_%S')
+                issue_id = f"issue_{timestamp}"
         
         # 確保issue_id只保留最後部分，不包含完整路徑
         if '/' in issue_id:
-            # 從路徑中提取檔案名稱
             issue_id = issue_id.split('/')[-1]
-            # 移除副檔名
             issue_id = issue_id.split('.')[0]
         
-        # 驗證location (A1 ~ C3)
-        location = issue_data.get('location', 'A1')
-        valid_locations = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3']
-        if location not in valid_locations:
-            location = 'A1'  # 如果無效則設為A1
+        # 獲取或生成時間戳
+        timestamp = issue_data.get('timestamp')
+        if not timestamp:
+            timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         
-        # 驗證crack_type
-        valid_crack_types = [
-            'Longitudinal', 'Transverse', 'Diagonal', 'Radial', 
-            'Annular', 'Rippled', 'Network', 'Turtle-shell patterned'
-        ]
-        crack_type = issue_data.get('crack_type', 'Longitudinal')
-        if crack_type not in valid_crack_types:
-            crack_type = 'Longitudinal'  # 如果無效則設為Longitudinal
-        
-        # 驗證length_cm (0 ~ 9999)
+        # 驗證length (0 ~ 9999)
         try:
-            length_cm = float(issue_data.get('length_cm', 0))
-            length_cm = max(0, min(9999, length_cm))  # 確保在0-9999範圍內
+            length = str(float(issue_data.get('length', 0)))
         except (ValueError, TypeError):
-            length_cm = 0
+            length = "0"
             
-        # 驗證depth_cm (0 ~ 9999)
+        # 驗證width (0 ~ 9999)
         try:
-            depth_cm = float(issue_data.get('depth_cm', 0))
-            depth_cm = max(0, min(9999, depth_cm))  # 確保在0-9999範圍內
+            width = str(float(issue_data.get('width', 0)))
         except (ValueError, TypeError):
-            depth_cm = 0
+            width = "0"
         
-        # 驗證risk_level - 優先使用metadata中的值，其次是AI判斷，最後是根據尺寸計算
+        # 獲取位置和材料
+        position = issue_data.get('position', 'mountain')
+        material = issue_data.get('material', 'concrete')
+        
+        # 獲取裂縫位置
+        crack_location = issue_data.get('crack_location', issue_data.get('location', 'A'))
+        
+        # 驗證風險等級
         valid_risk_levels = ['Low', 'Medium', 'High']
         risk_level = issue_data.get('risk_level', '')
         
         if risk_level not in valid_risk_levels:
-            # 如果metadata中沒有有效值，嘗試使用AI判斷的值
             if ai_risk_level in valid_risk_levels:
                 risk_level = ai_risk_level
-                logger.info(f"Using AI-determined risk level: {risk_level}")
             else:
-                # 如果AI也沒有判斷，根據尺寸計算
-                if length_cm > 100 or depth_cm > 5:
-                    risk_level = "High"
-                elif length_cm > 50 or depth_cm > 2:
-                    risk_level = "Medium"
-                else:
+                # 根據尺寸計算風險等級
+                try:
+                    length_float = float(length)
+                    width_float = float(width)
+                    if length_float > 100 or width_float > 5:
+                        risk_level = "High"
+                    elif length_float > 50 or width_float > 2:
+                        risk_level = "Medium"
+                    else:
+                        risk_level = "Low"
+                except:
                     risk_level = "Low"
-                logger.info(f"Using calculated risk level: {risk_level}")
-        else:
-            logger.info(f"Using metadata-provided risk level: {risk_level}")
         
-        # 驗證status - 優先使用metadata中的值
-        valid_statuses = ['Done', 'In Progress', 'Not Started']
-        status = issue_data.get('status', 'Not Started')
-        if status not in valid_statuses:
-            status = 'Not Started'
-        
-        # 獲取action - 優先使用metadata中的值，其次是AI判斷的值
+        # 獲取處理建議
         action = issue_data.get('action', '')
         if not action and ai_action:
             action = ai_action
-            logger.info(f"Using AI-determined action: {action}")
         elif not action:
             action = "待處理"
-        else:
-            logger.info(f"Using metadata-provided action: {action}")
-        
-        # 獲取description - 優先使用metadata中的值，其次是AI回應
-        description = issue_data.get('description', '')
-        if not description:
-            description = solution if isinstance(solution, str) else json.dumps(solution)
-        
-        # 從metadata獲取日期或使用當前日期
-        date = issue_data.get('date', time.strftime('%Y-%m-%d'))
-        
-        # 預設工程師
-        engineer = issue_data.get('engineer', '張工程師')
         
         # 獲取圖片URL
         image_url = issue_data.get('image_url', '')
         
-        # 返回符合DynamoDB模式的格式化數據
+        # 獲取工程師
+        engineer = issue_data.get('engineer', '張工程師')
+        
+        # 返回符合要求格式的資料
         return {
-            'issue_id': issue_id,      # hash key
-            'date': date,              # GSI hash key
-            'risk_level': risk_level,  # GSI hash key
-            'status': status,          # GSI hash key
-            'location': location,      # GSI hash key
-            'crack_type': crack_type,  # GSI hash key
-            'engineer': engineer,      # 一般屬性
-            'length_cm': length_cm,    # 數值欄位
-            'depth_cm': depth_cm,      # 數值欄位
-            'action': action,          # 處理方式
-            'description': description, # 描述
-            'image_url': image_url,    # 圖片URL
-            'ai_solution': solution    # 保存完整的AI回應
+            'id': issue_id,
+            'timestamp': timestamp,
+            'length': length,
+            'width': width,
+            'position': position,
+            'material': material,
+            'crack_location': crack_location,
+            'image_url': image_url,
+            'engineer': engineer,
+            'risk_level': risk_level,
+            'action': action,
+            'ai_solution': solution  # 保存完整AI回應，用於後續分析
         }
     except Exception as e:
         logger.error(f"Error in validate_and_format_data: {e}")
         # 發生錯誤時返回最小有效項目
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+        error_id = f"ERROR-{int(time.time())}"
         return {
-            'issue_id': issue_id if 'issue_id' in locals() else f"ERROR-{int(time.time())}",
-            'date': time.strftime('%Y-%m-%d'),
-            'risk_level': 'Low',
-            'status': 'Not Started',
-            'location': 'A1',
-            'crack_type': 'Longitudinal',
+            'id': error_id,
+            'timestamp': timestamp,
+            'length': "0",
+            'width': "0",
+            'position': 'mountain',
+            'material': 'concrete',
+            'crack_location': 'A',
+            'image_url': '',
             'engineer': '張工程師',
-            'length_cm': 0,
-            'depth_cm': 0,
-            'action': '待處理',
-            'description': '處理錯誤'
+            'risk_level': 'Low',
+            'action': '待處理'
         }
 
 def store_in_dynamodb(issue_data, solution):
@@ -340,10 +311,10 @@ def store_in_dynamodb(issue_data, solution):
         item = validate_and_format_data(issue_data, solution)
         
         # Convert numeric values to Decimal for DynamoDB compatibility
-        if 'length_cm' in item:
-            item['length_cm'] = Decimal(str(item['length_cm']))
-        if 'depth_cm' in item:
-            item['depth_cm'] = Decimal(str(item['depth_cm']))
+        if 'length' in item:
+            item['length'] = Decimal(str(item['length']))
+        if 'width' in item:
+            item['width'] = Decimal(str(item['width']))
             
         # Store item in DynamoDB
         table.put_item(Item=item)
@@ -353,6 +324,7 @@ def store_in_dynamodb(issue_data, solution):
     except Exception as e:
         logger.error(f"Error storing data in DynamoDB: {e}")
         return False
+
 
 def lambda_handler(event, context):
     """

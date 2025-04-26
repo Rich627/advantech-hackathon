@@ -2,9 +2,8 @@ import json
 import boto3
 import os
 import logging
-import time
 
-def sns_notification(crack_location, report_key):
+def sns_notification(crack_location, report_id, timestamp):
     """
     This function is for sending notifications by using SNS.
     """
@@ -13,8 +12,8 @@ def sns_notification(crack_location, report_key):
         topic_arn = os.environ.get('SNS_TOPIC_ARN')
 
         cloudfront_url = os.environ.get('CLOUDFRONT_URL')
-        present_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        report_url = f"{cloudfront_url}/report/{report_key}"
+        present_time = timestamp
+        report_url = f"{cloudfront_url}/report/{report_id}"
         
         
         subject = f"[MAINTENANCE NOTIFICATION] Tunnel {crack_location}  Maintenance"
@@ -27,7 +26,7 @@ MAINTENANCE DETAILS:
 • Issue: Structural crack detected
 • Location: Section {crack_location}, west-facing wall
 • Severity: Requiring immediate attention
-• Maintenance Start: {present_time} (UTC+8)
+• Issue Start: {present_time} (UTC+8)
 • Expected Duration: 4-6 hours
 • Service Impact: Access to affected tunnel section will be restricted; expect detours and delays
 
@@ -73,14 +72,16 @@ def lambda_handler(event, context):
     """
     try:
         tunnel_id = event.get('tunnel_id')
-        report_key = event.get('object_key')
-        if not tunnel_id or not report_key:
+        report_id = event.get('object_key')
+        timestamp = event.get('timestamp')
+        
+        if not tunnel_id or not report_id:
             return {
                 'statusCode': 400,
                 'body': json.dumps('Missing tunnel_id or object_key in the event')
             }
         # Call the SNS notification function
-        return sns_notification(tunnel_id, report_key)
+        return sns_notification(tunnel_id, report_id, timestamp)
     except Exception as e:
         print(f"Error in lambda_handler: {e}")
         return {

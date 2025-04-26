@@ -14,7 +14,7 @@ def presigned_url_handler(object_key):
     """
     try:
         s3_client = boto3.client('s3')
-        bucket_name = os.environ.get('BUCKET_NAME', 'your-bucket-name')
+        bucket_name = os.environ.get('BUCKET_NAME', 'genai-hackthon-20250426-image-bucket')
         
         # Generate presigned URL for the S3 object
         presigned_url = s3_client.generate_presigned_url(

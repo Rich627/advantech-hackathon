@@ -15,7 +15,10 @@ resource "aws_lambda_function" "llm_advise_handler" {
     }
   }
 
-  depends_on = [aws_opensearchserverless_security_policy.vdb_encryption_policy]
+  depends_on = [
+    aws_opensearchserverless_security_policy.vdb_encryption_policy,
+    null_resource.docker_build_push["llm_advise_handler"]
+  ]
 }
 
 
@@ -28,6 +31,10 @@ resource "aws_lambda_function" "doc_process" {
   image_uri     = "${var.ecr_repository_url}/doc_process:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Process equipment documents"
+
+  depends_on = [
+    null_resource.docker_build_push["doc_process"]
+  ]
 }
 
 ################################################
@@ -39,6 +46,10 @@ resource "aws_lambda_function" "util" {
   image_uri     = "${var.ecr_repository_url}/util:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Utility functions for equipment management"
+
+  depends_on = [
+    null_resource.docker_build_push["util"]
+  ]
 }
 
 ################################################
@@ -56,6 +67,10 @@ resource "aws_lambda_function" "sns_notfication" {
       SNS_TOPIC_ARN = aws_sns_topic.alert_topic.arn
     }
   }
+
+  depends_on = [
+    null_resource.docker_build_push["sns_notfication"]
+  ]
 }
 
 ################################################
@@ -75,6 +90,11 @@ resource "aws_lambda_function" "ingest_data" {
       OPENSEARCH_REGION = var.aws_region
     }
   }
+
+  depends_on = [
+    aws_opensearchserverless_security_policy.vdb_encryption_policy,
+    null_resource.docker_build_push["ingest_data"]
+  ]
 }
 
 
@@ -87,6 +107,10 @@ resource "aws_lambda_function" "render_frontend" {
   image_uri     = "${var.ecr_repository_url}/render_frontend:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Render frontend for equipment management"
+
+  depends_on = [
+    null_resource.docker_build_push["render_frontend"]
+  ]
 }
 
 ################################################
@@ -98,6 +122,10 @@ resource "aws_lambda_function" "complete" {
   image_uri     = "${var.ecr_repository_url}/complete:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Complete processing workflow"
+
+  depends_on = [
+    null_resource.docker_build_push["complete"]
+  ]
 }
 
 ################################################
@@ -115,6 +143,10 @@ resource "aws_lambda_function" "presigned_url" {
       IMAGE_BUCKET_NAME = aws_s3_bucket.image_bucket.bucket
     }
   }
+
+  depends_on = [
+    null_resource.docker_build_push["presigned_url"]
+  ]
 }
 
 

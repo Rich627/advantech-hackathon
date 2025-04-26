@@ -79,13 +79,8 @@ def get_target_folder(content_type, object_key, file_content=None):
     """
     try:
         # 如果是圖片類型
-        if is_image_content_type(content_type):
-            # 從檔名中提取主檔名
+        if content_type.lower() == 'image/jpg':
             filename = extract_filename_from_path(object_key)
-            if not filename:
-                # 如果無法提取有效檔名，使用時間戳作為資料夾名稱
-                filename = f"image_{int(time.time())}"
-            
             return f"issue/{filename}/"
         
         # 如果是JSON類型
@@ -191,9 +186,13 @@ def generate_upload_url(object_key, content_type='image/jpeg', file_content=None
             },
             ExpiresIn=300  # URL valid for 5 minutes to allow time for upload
         )
+        print(f"presigned url: {presigned_url}")
+        logger.info(f"Presigned URL generated: {presigned_url}")
         
         # 構建標準 S3 URL (不是預簽名的 URL)
         s3_url = f"https://{bucket_name}.s3.amazonaws.com/{full_object_key}"
+        print(f"standard s3 url: {s3_url}")
+        logger.info(f"Standard S3 URL: {s3_url}")
         
         return {
             'statusCode': 200,
@@ -353,7 +352,7 @@ def lambda_handler(event, context):
             
             # 處理一般請求 (獲取 presigned URL)
             query_params = event.get('queryStringParameters', {}) or {}            
-            content_type = query_params.get('content_type', 'image/jpeg')
+            content_type = query_params.get('content_type', 'image/jpg')
             
             # 生成唯一的檔案名稱，如果未提供
             object_key = query_params.get('key')
@@ -367,7 +366,7 @@ def lambda_handler(event, context):
                 if content_type == 'application/json':
                     file_ext = '.json'
                 elif 'image/' in content_type:
-                    file_ext = '.' + content_type.split('/')[-1]
+                    content_type = 'image/jpg'
                 
                 # 僅生成檔名部分，不包含路徑
                 object_key = f"{timestamp}_{unique_id}{file_ext}"
@@ -395,14 +394,12 @@ def lambda_handler(event, context):
             
         # 處理常規 API Gateway 請求
         elif 'httpMethod' in event or 'queryStringParameters' in event:
-            params = event.get('queryStringParameters', {}) or {}
-            
-            # 必需參數：動作（上傳或下載）
+            params = event.get('queryStringParameters', {}) or {}            
             action = params.get('action', '').lower()
             
             if action == 'upload':
                 object_key = params.get('key')
-                content_type = params.get('content_type', 'image/jpeg')
+                content_type = params.get('content_type', 'image/jpg')
                 
                 if not object_key:
                     return {

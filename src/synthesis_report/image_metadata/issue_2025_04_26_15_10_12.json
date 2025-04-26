@@ -1,0 +1,11 @@
+{
+  "id": "issue_2025_04_26_15_10_12",
+  "timestamp": "2025-04-26 15:10:12",
+  "length": 80,
+  "width": 5,
+  "position": "valley",
+  "material": "steel",
+  "crack_type": "Transverse",
+  "crack_location": "B",
+  "image_url": "https://genai-hackthon-20250426-image-bucket/image/issue_2025_04_26_15_10_12.jpg"
+}

@@ -2,9 +2,11 @@
 
 # 設定變數
 BUCKET_NAME="your-bucket-name"  # 請替換成您的S3儲存桶名稱
-ISSUE_ID="ISSUE-001"
+CURRENT_TIMESTAMP=$(date "+%Y_%m_%d_%H_%M_%S")
+ISSUE_ID="issue_${CURRENT_TIMESTAMP}"
 TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
 ISSUE_FOLDER="issues/${ISSUE_ID}"
+CLOUDFRONT_URL="https://d3hi3054wpq3c0.cloudfront.net"
 
 # 建立測試資料夾結構
 mkdir -p "test/${ISSUE_FOLDER}"
@@ -14,8 +16,8 @@ cat > "test/${ISSUE_FOLDER}/${ISSUE_ID}.json" << EOF
 {
   "id": "${ISSUE_ID}",
   "timestamp": "${TIMESTAMP}",
-  "length_cm": 150,
-  "depth_cm": 2,
+  "length": "15.5",
+  "width": "10.2",
   "position": "mountain",
   "material": "concrete",
   "crack_type": "Longitudinal",
@@ -31,15 +33,33 @@ touch "test/${ISSUE_FOLDER}/${ISSUE_ID}.jpg"
 
 echo "測試檔案已建立在 test/${ISSUE_FOLDER} 資料夾中"
 
-# 上傳檔案到S3
-echo "開始上傳檔案到S3..."
+echo "開始上傳檔案..."
+
+# 取得JSON檔案的presigned URL
+echo "取得metadata.json的presigned URL..."
+JSON_PRESIGNED_URL=$(curl -s -X GET "${CLOUDFRONT_URL}" | grep -o '"url": "[^"]*"' | cut -d'"' -f4)
+
+if [ -z "$JSON_PRESIGNED_URL" ]; then
+    echo "無法獲取metadata.json的presigned URL，請檢查API是否正常運作"
+    exit 1
+fi
 
 # 上傳metadata.json
-aws s3 cp "test/${ISSUE_FOLDER}/${ISSUE_ID}.json" "s3://${BUCKET_NAME}/${ISSUE_FOLDER}/${ISSUE_ID}.json"
+echo "上傳metadata.json..."
+curl -X PUT -T "test/${ISSUE_FOLDER}/${ISSUE_ID}.json" -H "Content-Type: application/json" "${JSON_PRESIGNED_URL}"
+
+# 取得圖片檔案的presigned URL
+echo "取得圖片檔案的presigned URL..."
+IMAGE_PRESIGNED_URL=$(curl -s -X GET "${CLOUDFRONT_URL}" | grep -o '"url": "[^"]*"' | cut -d'"' -f4)
+
+if [ -z "$IMAGE_PRESIGNED_URL" ]; then
+    echo "無法獲取圖片檔案的presigned URL，請檢查API是否正常運作"
+    exit 1
+fi
 
 # 上傳圖片檔案
-aws s3 cp "test/${ISSUE_FOLDER}/${ISSUE_ID}.jpg" "s3://${BUCKET_NAME}/image/${ISSUE_ID}.jpg"
+echo "上傳圖片檔案..."
+curl -X PUT -T "test/${ISSUE_FOLDER}/${ISSUE_ID}.jpg" -H "Content-Type: image/jpeg" "${IMAGE_PRESIGNED_URL}"
 
 echo "上傳完成！"
-echo "已上傳檔案到: s3://${BUCKET_NAME}/${ISSUE_FOLDER}/ 和 s3://${BUCKET_NAME}/image/"
 echo "請檢查 Lambda 函數日誌來確認是否正確觸發及執行" 

@@ -1,9 +1,11 @@
 {
-  "issue_id": "ISSUE-001", //issue id range: ISSUE-001 ~ ISSUE-999
-  "location": "A1",
-  "crack_type": "Longitudinal", //crack type range: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
+  "id": "issue_2023_10_27_10_00_00", //issue id range: ISSUE-001 ~ ISSUE-999
+  "timestamp": "2023-10-27  10:00:00",
   "length_cm": 150, //length range: 0 ~ 9999
   "depth_cm": 2, //depth range: 0 ~ 9999
-  "date": "2025-05-13",
+  "position": "mountain",
+  "material": "concrete",
+  "crack_type": "Longitudinal", //crack type range: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
+  "crack_location": "A", //crack location range: A to Z
   "image_url": "https://s3.amazonaws.com/xxx/image/ISSUE-001.jpg"
 } 

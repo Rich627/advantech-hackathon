@@ -8,15 +8,28 @@
 
 ```json
 {
-  "id": "ISSUE-001", // 問題ID範圍: ISSUE-001 ~ ISSUE-999
-  "location": "A1", // 位置代碼
-  "crack_type": "Longitudinal", // 裂縫類型: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
-  "length_cm": 150, // 長度範圍: 0 ~ 9999 公分
-  "depth_cm": 2, // 深度範圍: 0 ~ 9999 公分
-  "date": "2025-05-13", // 日期格式: YYYY-MM-DD
-  "image_url": "https://s3.amazonaws.com/xxx/image/ISSUE-001.jpg" // 圖片URL
+  "id": "issue_2023_10_27_10_00_00", //issue id range: ISSUE-001 ~ ISSUE-999
+  "timestamp": "2023-10-27  10:00:00",
+  "length_cm": 150, //length range: 0 ~ 9999
+  "depth_cm": 2, //depth range: 0 ~ 9999
+  "position": "mountain",
+  "material": "concrete",
+  "crack_type": "Longitudinal", //crack type range: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
+  "crack_location": "A", //crack location range: A to Z
+  "image_url": "https://s3.amazonaws.com/xxx/image/ISSUE-001.jpg"
 }
 ```
+
+欄位說明：
+- `id`: 問題ID，格式為 issue_YYYY_MM_DD_HH_MM_SS，範圍 ISSUE-001 ~ ISSUE-999
+- `timestamp`: 時間戳記，格式為 YYYY-MM-DD HH:MM:SS
+- `length_cm`: 裂縫長度（公分），範圍 0 ~ 9999
+- `depth_cm`: 裂縫深度（公分），範圍 0 ~ 9999
+- `position`: 位置描述
+- `material`: 材質描述
+- `crack_type`: 裂縫類型，可選值：Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
+- `crack_location`: 裂縫位置代碼，範圍 A 到 Z
+- `image_url`: 圖片URL
 
 ## 資料夾結構
 

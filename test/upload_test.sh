@@ -3,7 +3,7 @@
 # 設定變數
 BUCKET_NAME="your-bucket-name"  # 請替換成您的S3儲存桶名稱
 ISSUE_ID="ISSUE-001"
-DATE=$(date "+%Y-%m-%d")
+TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
 ISSUE_FOLDER="issues/${ISSUE_ID}"
 
 # 建立測試資料夾結構
@@ -12,12 +12,14 @@ mkdir -p "test/${ISSUE_FOLDER}"
 # 建立metadata.json檔案
 cat > "test/${ISSUE_FOLDER}/${ISSUE_ID}.json" << EOF
 {
-  "id": "${ISSUE_ID}", 
-  "location": "A1",
-  "crack_type": "Longitudinal", 
-  "length_cm": 150, 
-  "depth_cm": 2, 
-  "date": "${DATE}",
+  "id": "${ISSUE_ID}",
+  "timestamp": "${TIMESTAMP}",
+  "length_cm": 150,
+  "depth_cm": 2,
+  "position": "mountain",
+  "material": "concrete",
+  "crack_type": "Longitudinal",
+  "crack_location": "A",
   "image_url": "https://s3.amazonaws.com/${BUCKET_NAME}/image/${ISSUE_ID}.jpg"
 }
 EOF

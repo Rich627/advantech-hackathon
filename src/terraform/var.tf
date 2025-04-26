@@ -1,13 +1,13 @@
 variable "ecr_repository_url" {
-  description = "ECR repository URL (e.g., 429555954826.dkr.ecr.us-east-1.amazonaws.com)"
+  description = "ECR repository URL (e.g., 12345678.dkr.ecr.us-east-1.amazonaws.com)"
   type        = string
-  default    = "429555954826.dkr.ecr.us-east-1.amazonaws.com"
+  default     = "467392743157.dkr.ecr.us-west-2.amazonaws.com"
 }
 
 variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
 }
 
 variable "bedrock_model_id" {

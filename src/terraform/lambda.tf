@@ -16,7 +16,7 @@ resource "aws_lambda_function" "llm_issue_handler" {
   }
 
   depends_on = [
-    null_resource.docker_build_push["llm_issue_handler"]
+    aws_ecr_repository.lambda_repos["llm_issue_handler"]
   ]
 }
 
@@ -32,7 +32,7 @@ resource "aws_lambda_function" "doc_process" {
   description   = "Process equipment documents"
 
   depends_on = [
-    null_resource.docker_build_push["doc_process"]
+    aws_ecr_repository.lambda_repos["doc_process"]
   ]
 }
 
@@ -47,7 +47,7 @@ resource "aws_lambda_function" "util" {
   description   = "Utility functions for equipment management"
 
   depends_on = [
-    null_resource.docker_build_push["util"]
+    aws_ecr_repository.lambda_repos["util"]
   ]
 }
 
@@ -68,7 +68,7 @@ resource "aws_lambda_function" "sns_handler" {
   }
 
   depends_on = [
-    null_resource.docker_build_push["sns_handler"]
+    aws_ecr_repository.lambda_repos["sns_handler"]
   ]
 }
 
@@ -91,7 +91,7 @@ resource "aws_lambda_function" "pdf_ingest_handler" {
   }
 
   depends_on = [
-    null_resource.docker_build_push["pdf_ingest_handler"]
+    aws_ecr_repository.lambda_repos["pdf_ingest_handler"]
   ]
 }
 
@@ -107,7 +107,7 @@ resource "aws_lambda_function" "render_frontend" {
   description   = "Render frontend for equipment management"
 
   depends_on = [
-    null_resource.docker_build_push["render_frontend"]
+    aws_ecr_repository.lambda_repos["render_frontend"]
   ]
 }
 
@@ -122,7 +122,7 @@ resource "aws_lambda_function" "complete" {
   description   = "Complete processing workflow"
 
   depends_on = [
-    null_resource.docker_build_push["complete"]
+    aws_ecr_repository.lambda_repos["complete"]
   ]
 }
 
@@ -143,7 +143,7 @@ resource "aws_lambda_function" "presigned_url" {
   }
 
   depends_on = [
-    null_resource.docker_build_push["presigned_url"]
+    aws_ecr_repository.lambda_repos["presigned_url"]
   ]
 }
 

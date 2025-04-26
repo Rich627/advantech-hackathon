@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 設定變數
-BUCKET_NAME="your-bucket-name"  # 請替換成您的S3儲存桶名稱
+BUCKET_NAME="genai-hackthon-20250426-image-bucket-tf"  # 請替換成您的S3儲存桶名稱
 ISSUE_ID="ISSUE-001"
 TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
 ISSUE_FOLDER="issues/${ISSUE_ID}"

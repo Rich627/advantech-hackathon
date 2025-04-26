@@ -7,6 +7,8 @@ resource "aws_lambda_function" "llm_issue_handler" {
   image_uri     = "${var.ecr_repository_url}/llm_issue_handler:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Analyze image with LLM by RAG"
+  memory_size   = 512
+  timeout       = 30
 
   environment {
     variables = {
@@ -30,6 +32,8 @@ resource "aws_lambda_function" "doc_process" {
   image_uri     = "${var.ecr_repository_url}/doc_process:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Process equipment documents"
+  memory_size   = 512
+  timeout       = 30
 
   depends_on = [
     aws_ecr_repository.lambda_repos["doc_process"]
@@ -45,6 +49,8 @@ resource "aws_lambda_function" "util" {
   image_uri     = "${var.ecr_repository_url}/util:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Utility functions for equipment management"
+  memory_size   = 512
+  timeout       = 30
 
   depends_on = [
     aws_ecr_repository.lambda_repos["util"]
@@ -60,6 +66,8 @@ resource "aws_lambda_function" "sns_handler" {
   image_uri     = "${var.ecr_repository_url}/sns_handler:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Notify employee via SNS"
+  memory_size   = 512
+  timeout       = 30
   
   environment {
     variables = {
@@ -81,6 +89,8 @@ resource "aws_lambda_function" "pdf_ingest_handler" {
   image_uri     = "${var.ecr_repository_url}/pdf_ingest_handler:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Ingest daily report to OpenSearch Serverless"
+  memory_size   = 512
+  timeout       = 30
 
   environment {
     variables = {
@@ -105,6 +115,8 @@ resource "aws_lambda_function" "render_frontend" {
   image_uri     = "${var.ecr_repository_url}/render_frontend:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Render frontend for equipment management"
+  memory_size   = 512
+  timeout       = 30
 
   depends_on = [
     aws_ecr_repository.lambda_repos["render_frontend"]
@@ -120,6 +132,8 @@ resource "aws_lambda_function" "complete" {
   image_uri     = "${var.ecr_repository_url}/complete:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Complete processing workflow"
+  memory_size   = 512
+  timeout       = 30
 
   depends_on = [
     aws_ecr_repository.lambda_repos["complete"]
@@ -135,6 +149,8 @@ resource "aws_lambda_function" "presigned_url" {
   image_uri     = "${var.ecr_repository_url}/presigned_url:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Generate presigned URLs for S3 uploads"
+  memory_size   = 512
+  timeout       = 30
   
   environment {
     variables = {

@@ -2,8 +2,44 @@ import boto3
 import os
 import logging
 import json
+import uuid
+import requests
+import time
+import base64
 
-def get_presigned_url(object_key):
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+
+def is_image_content_type(content_type):
+    """
+    Determine if the content type is an image type
+    
+    Parameters:
+        content_type: MIME type string
+    Returns:
+        Boolean indicating whether content type is an image
+    """
+    image_types = 'image/jpg'
+    return content_type.lower() in image_types
+
+def get_target_folder(content_type, filename):
+    """
+    Determine the target folder based on content type and filename
+    
+    Parameters:
+        content_type: MIME type string
+        filename: Original filename or object key
+    Returns:
+        String folder path ('issue_image' or 'issue_json')
+    """
+    # 檢查內容類型是否為圖片
+    if is_image_content_type(content_type):
+        return 'issue_image'
+    else:
+        return 'issue_json'
+      
+def generate_download_url(object_key):
     """
     Generate a presigned URL for downloading an S3 object.
     
@@ -28,13 +64,13 @@ def get_presigned_url(object_key):
             'body': json.dumps({'presigned_url': presigned_url, 'operation': 'get'})
         }
     except Exception as e:
-        print(f"Error generating download presigned URL: {e}")
+        logger.error(f"Error generating download presigned URL: {e}")
         return {
             'statusCode': 500,
             'body': json.dumps({'error': str(e)})
         }
-
-def generate_upload_url(object_key, content_type='image/jpeg'):
+  
+def generate_upload_url(object_key, content_type='image/jpg'):
     """
     Generate a presigned URL for uploading an object to S3.
     
@@ -48,6 +84,17 @@ def generate_upload_url(object_key, content_type='image/jpeg'):
         s3_client = boto3.client('s3')
         bucket_name = os.environ.get('BUCKET_NAME', 'genai-hackthon-20250426-image-bucket')
         
+        target_folder = get_target_folder(content_type, object_key)
+        
+        # 檢查 object_key 是否已包含文件夾路徑
+        if '/' in object_key:
+            filename = object_key.split('/')[-1]
+            object_key = f"{target_folder}/{filename}"
+        else:
+            object_key = f"{target_folder}/{object_key}"
+        
+        logger.info(f"Generating presigned URL for {object_key} with content type {content_type}")
+        
         # Generate presigned URL for uploading to S3
         presigned_url = s3_client.generate_presigned_url(
             'put_object',
@@ -59,19 +106,117 @@ def generate_upload_url(object_key, content_type='image/jpeg'):
             ExpiresIn=300  # URL valid for 5 minutes to allow time for upload
         )
         
+        # 構建標準 S3 URL (不是預簽名的 URL)
+        s3_url = f"https://{bucket_name}.s3.amazonaws.com/{object_key}"
+        
         return {
             'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+            },
             'body': json.dumps({
                 'presigned_url': presigned_url,
                 'operation': 'put',
                 'bucket': bucket_name,
-                'key': object_key
+                'key': object_key,
+                's3_url': s3_url
             })
         }
     except Exception as e:
-        print(f"Error generating upload presigned URL: {e}")
+        logger.error(f"Error generating upload presigned URL: {e}")
         return {
             'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({'error': str(e)})
+        }
+    
+def upload_to_s3_via_presigned_url(file_content, content_type='image/jpg'):
+    """
+    Generate a presigned URL and use it to upload a file to S3
+    
+    Parameters:
+        file_content: Binary content of the file to upload
+        content_type: MIME type of the file being uploaded
+    Returns:
+        Dict containing the result of the upload operation
+    """
+    try:
+        # 1. 生成唯一的檔案名
+        unique_id = str(uuid.uuid4())
+        timestamp = str(int(time.time()))
+        
+        # 根據內容類型決定檔案副檔名
+        file_ext = '.jpg'  # 預設
+        if content_type == 'application/json':
+            file_ext = '.json'
+        elif 'image/' in content_type:
+            ext = content_type.split('/')[-1]
+            if ext in ['jpeg', 'png', 'gif', 'webp', 'tiff', 'bmp']:
+                file_ext = f'.{ext}'
+        
+        # 生成物件鍵名
+        object_key = f"{timestamp}_{unique_id}{file_ext}"
+        
+        # 2. 獲取 presigned URL
+        result = generate_upload_url(object_key, content_type)
+        
+        if result['statusCode'] != 200:
+            return result
+        
+        response_data = json.loads(result['body'])
+        presigned_url = response_data['presigned_url']
+        s3_url = response_data['s3_url']
+        
+        # 3. 使用 presigned URL 上傳文件到 S3
+        upload_response = requests.put(
+            presigned_url,
+            data=file_content,
+            headers={'Content-Type': content_type}
+        )
+        
+        # 4. 檢查上傳結果
+        if upload_response.status_code >= 200 and upload_response.status_code < 300:
+            logger.info(f"File uploaded successfully to {s3_url}")
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+                },
+                'body': json.dumps({
+                    'message': 'File uploaded successfully',
+                    'bucket': response_data['bucket'],
+                    'key': response_data['key'],
+                    's3_url': s3_url
+                })
+            }
+        else:
+            logger.error(f"Error uploading file. Status code: {upload_response.status_code}, Response: {upload_response.text}")
+            return {
+                'statusCode': upload_response.status_code,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'error': f"Failed to upload file. Status code: {upload_response.status_code}",
+                    'details': upload_response.text
+                })
+            }
+    except Exception as e:
+        logger.error(f"Error in upload_to_s3_via_presigned_url: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({'error': str(e)})
         }
 
@@ -86,57 +231,133 @@ def lambda_handler(event, context):
         Dict containing presigned URL or error message
     """
     try:
-        # Handle API Gateway requests
-        if 'httpMethod' in event or 'queryStringParameters' in event:
-            # Get query parameters
+        logger.info(f"Received event: {json.dumps(event)}")
+        
+        # 處理直接上傳請求 (POST 方法含有文件内容)
+        if 'httpMethod' in event and event['httpMethod'] == 'POST' and 'body' in event:
+            # 獲取內容類型
+            content_type = event.get('headers', {}).get('content-type', 'image/jpg')
+            
+            # 獲取文件內容
+            file_content = event['body']
+            
+            # 如果主體是 base64 編碼的，先解碼
+            if event.get('isBase64Encoded', False):
+                file_content = base64.b64decode(file_content)
+            
+            # 使用 presigned URL 上傳文件
+            return upload_to_s3_via_presigned_url(file_content, content_type)
+        
+        # Handle API Gateway v2 HTTP API requests
+        elif 'version' in event and event.get('version') == '2.0':
+            # 處理直接上傳請求 (對 API Gateway v2)
+            if event.get('requestContext', {}).get('http', {}).get('method') == 'POST' and 'body' in event:
+                # 獲取內容類型
+                content_type = event.get('headers', {}).get('content-type', 'image/jpg')
+                
+                # 獲取文件內容
+                file_content = event['body']
+                
+                # 如果主體是 base64 編碼的，先解碼
+                if event.get('isBase64Encoded', False):
+                    file_content = base64.b64decode(file_content)
+                
+                # 使用 presigned URL 上傳文件
+                return upload_to_s3_via_presigned_url(file_content, content_type)
+            
+            # 處理一般請求 (獲取 presigned URL)
+            query_params = event.get('queryStringParameters', {}) or {}            
+            content_type = query_params.get('content_type', 'image/jpg')
+            
+            # 生成唯一的檔案名稱，如果未提供
+            object_key = query_params.get('key')
+            if not object_key:
+                # 生成唯一檔案名
+                unique_id = str(uuid.uuid4())
+                timestamp = event.get('requestContext', {}).get('timeEpoch', '')
+                
+                # 根據內容類型決定檔案副檔名
+                file_ext = '.jpg'  # 預設
+                if content_type == 'application/json':
+                    file_ext = '.json'
+                elif 'image/' in content_type:
+                    file_ext = '.' + content_type.split('/')[-1]
+                
+                # 不指定完整路徑，讓 generate_upload_url 函數決定目標文件夾
+                object_key = f"{timestamp}_{unique_id}{file_ext}"
+            
+            # 生成上傳 URL
+            result = generate_upload_url(object_key, content_type)
+            
+            # 如果處理成功，返回 presigned_url 和 s3_url
+            if result.get('statusCode') == 200:
+                response_data = json.loads(result['body'])
+                
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
+                    },
+                    'body': json.dumps({
+                        'presigned_url': response_data.get('presigned_url'),
+                        's3_url': response_data.get('s3_url')
+                    })
+                }
+            
+            return result
+            
+        # 處理常規 API Gateway 請求
+        elif 'httpMethod' in event or 'queryStringParameters' in event:
             params = event.get('queryStringParameters', {}) or {}
             
-            # Required parameter: action (upload or download)
+            # 必需參數：動作（上傳或下載）
             action = params.get('action', '').lower()
             
-            # If action is upload, generate upload URL
             if action == 'upload':
                 object_key = params.get('key')
-                content_type = params.get('content_type', 'image/jpeg')
+                content_type = params.get('content_type', 'image/jpg')
                 
                 if not object_key:
                     return {
                         'statusCode': 400,
+                        'headers': {'Content-Type': 'application/json'},
                         'body': json.dumps({'error': 'Missing required parameter: key'})
                     }
                 
                 return generate_upload_url(object_key, content_type)
             
-            # For download or other actions, expect object_key
             else:
                 object_key = params.get('key')
                 
                 if not object_key:
                     return {
                         'statusCode': 400,
+                        'headers': {'Content-Type': 'application/json'},
                         'body': json.dumps({'error': 'Missing required parameter: key'})
                     }
                     
-                return get_presigned_url(object_key)
+                return generate_download_url(object_key)
         
-        # Handle S3 event triggers
         elif 'Records' in event and len(event['Records']) > 0 and 's3' in event['Records'][0]:
             object_key = event['Records'][0]['s3']['object']['key']
-            return get_presigned_url(object_key)
+            return generate_download_url(object_key)
         
-        # Invalid request format
         else:
             return {
                 'statusCode': 400,
+                'headers': {'Content-Type': 'application/json'},
                 'body': json.dumps({
                     'error': 'Invalid request format',
-                    'usage': 'For upload: ?action=upload&key=path/to/file.jpg&content_type=image/jpeg'
+                    'usage': 'For upload: ?action=upload&key=path/to/file.jpg&content_type=image/jpg'
                 })
             }
             
     except Exception as e:
-        print(f"Error in lambda_handler: {e}")
+        logger.error(f"Error in lambda_handler: {e}")
         return {
             'statusCode': 500,
+            'headers': {'Content-Type': 'application/json'},
             'body': json.dumps({'error': str(e)})
         }

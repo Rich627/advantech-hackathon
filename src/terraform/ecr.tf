@@ -1,13 +1,13 @@
 # 建立所有需要的 ECR 儲存庫
 resource "aws_ecr_repository" "lambda_repos" {
   for_each = toset([
-    "llm_advise_handler",
-    "doc_process",
+    "llm_issue_handler",
+    "doc_process", 
     "util",
-    "sns_notfication",
-    "ingest_data",
-    "render_frontend",
-    "complete",
+    "sns_handler", 
+    "pdf_ingest_handler", 
+    "render_frontend", 
+    "complete", 
     "presigned_url"
   ])
   
@@ -22,11 +22,11 @@ resource "aws_ecr_repository" "lambda_repos" {
 # 自動化建置和推送 Docker 映像的邏輯
 resource "null_resource" "docker_build_push" {
   for_each = toset([
-    "llm_advise_handler",
+    "llm_issue_handler",
     "doc_process", 
     "util",
     "sns_handler", 
-    "pdf_ingest_data", 
+    "pdf_ingest_handler", 
     "render_frontend", 
     "complete", 
     "presigned_url"

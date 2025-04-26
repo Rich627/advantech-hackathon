@@ -1,10 +1,10 @@
 ################################################
 ####### LLM Advise Handler Lambda Function ######
 ################################################
-resource "aws_lambda_function" "llm_advise_handler" {
+resource "aws_lambda_function" "llm_issue_handler" {
   function_name = "analyze_with_llm"
   package_type  = "Image"
-  image_uri     = "${var.ecr_repository_url}/llm_advise_handler:latest"
+  image_uri     = "${var.ecr_repository_url}/llm_issue_handler:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Analyze image with LLM by RAG"
 
@@ -17,7 +17,7 @@ resource "aws_lambda_function" "llm_advise_handler" {
 
   depends_on = [
     aws_opensearchserverless_security_policy.vdb_encryption_policy,
-    null_resource.docker_build_push["llm_advise_handler"]
+    null_resource.docker_build_push["llm_issue_handler"]
   ]
 }
 
@@ -55,10 +55,10 @@ resource "aws_lambda_function" "util" {
 ################################################
 ####### SNS Notification Lambda Function #######
 ################################################
-resource "aws_lambda_function" "sns_notfication" {
+resource "aws_lambda_function" "sns_handler" {
   function_name = "notify_employee"
   package_type  = "Image"
-  image_uri     = "${var.ecr_repository_url}/sns_notfication:latest"
+  image_uri     = "${var.ecr_repository_url}/sns_handler:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Notify employee via SNS"
   
@@ -69,17 +69,17 @@ resource "aws_lambda_function" "sns_notfication" {
   }
 
   depends_on = [
-    null_resource.docker_build_push["sns_notfication"]
+    null_resource.docker_build_push["sns_handler"]
   ]
 }
 
 ################################################
 ### Ingest Embedding Data Lambda Function ######
 ################################################
-resource "aws_lambda_function" "ingest_data" {
+resource "aws_lambda_function" "pdf_ingest_handler" {
   function_name = "ingest_daily_report"
   package_type  = "Image"
-  image_uri     = "${var.ecr_repository_url}/ingest_data:latest"
+  image_uri     = "${var.ecr_repository_url}/pdf_ingest_handler:latest"
   role          = aws_iam_role.lambda_exec.arn
   description   = "Ingest daily report to OpenSearch Serverless"
 
@@ -93,7 +93,7 @@ resource "aws_lambda_function" "ingest_data" {
 
   depends_on = [
     aws_opensearchserverless_security_policy.vdb_encryption_policy,
-    null_resource.docker_build_push["ingest_data"]
+    null_resource.docker_build_push["pdf_ingest_handler"]
   ]
 }
 
@@ -249,11 +249,11 @@ resource "aws_iam_policy" "lambda_invoke_policy" {
           "lambda:InvokeAsync"
         ],
         Resource = [
-          aws_lambda_function.llm_advise_handler.arn,
+          aws_lambda_function.llm_issue_handler.arn,
           aws_lambda_function.doc_process.arn,
           aws_lambda_function.util.arn,
-          aws_lambda_function.sns_notfication.arn,
-          aws_lambda_function.ingest_data.arn,
+          aws_lambda_function.sns_handler.arn,
+          aws_lambda_function.pdf_ingest_handler.arn,
           aws_lambda_function.render_frontend.arn,
           aws_lambda_function.complete.arn,
           aws_lambda_function.presigned_url.arn
@@ -263,11 +263,11 @@ resource "aws_iam_policy" "lambda_invoke_policy" {
   })
 
   depends_on = [
-    aws_lambda_function.llm_advise_handler,
+    aws_lambda_function.llm_issue_handler,
     aws_lambda_function.doc_process,
     aws_lambda_function.util,
-    aws_lambda_function.sns_notfication,
-    aws_lambda_function.ingest_data,
+    aws_lambda_function.sns_handler,
+    aws_lambda_function.pdf_ingest_handler,
     aws_lambda_function.render_frontend,
     aws_lambda_function.complete,
     aws_lambda_function.presigned_url

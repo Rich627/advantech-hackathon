@@ -1,4 +1,5 @@
 resource "aws_wafv2_web_acl" "main" {
+  provider = aws.waf
   name        = "equipment-management-waf"
   description = "WAF Web ACL for equipment management application"
   scope       = "CLOUDFRONT"
@@ -36,9 +37,9 @@ resource "aws_wafv2_web_acl" "main" {
                     }
                     positional_constraint = "EXACTLY"
                     search_string         = "icam-540"
-                    text_transformations {
-                        priority = 0
-                        type     = "NONE"
+                    text_transformation {
+                      priority = 0
+                      type     = "NONE"
                     }
                 }
             }
@@ -60,7 +61,6 @@ resource "aws_wafv2_web_acl" "main" {
   }
 
   tags = {
-    Environment = var.environment
     Project     = "equipment-management"
   }
 }

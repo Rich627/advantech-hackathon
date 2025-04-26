@@ -12,10 +12,10 @@ output "history_bucket_name" {
   value       = aws_s3_bucket.history_report_bucket.bucket
 }
 
-output "opensearch_endpoint" {
-  description = "Endpoint of the OpenSearch Serverless collection"
-  value       = aws_opensearchserverless_collection.vdb_collection.collection_endpoint
-}
+# output "opensearch_endpoint" {
+#   description = "Endpoint of the OpenSearch Serverless collection"
+#   value       = data.aws_opensearchserverless_collection.existing_collection.collection_endpoint
+# }
 
 output "cloudfront_domain_name" {
   description = "CloudFront distribution domain name"
@@ -25,9 +25,4 @@ output "cloudfront_domain_name" {
 output "waf_web_acl_id" {
   description = "WAF Web ACL ID"
   value       = aws_wafv2_web_acl.main.id
-}
-
-output "website_url" {
-  description = "Website URL"
-  value       = "https://${var.domain_name}"
 }

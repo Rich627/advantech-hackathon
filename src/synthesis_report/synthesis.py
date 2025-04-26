@@ -9,8 +9,8 @@ from typing import List, Dict, Any, Optional, Union
 class BedrockDataSynthesizer:
     def __init__(
         self, 
-        model_id: str = "anthropic.claude-3-sonnet-20240229-v1:0", 
-        region: str = "us-east-1",
+        model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0", 
+        region: str = "us-west-2",
         temperature: float = 0.7,
         batch_size: int = 3
     ):
@@ -261,7 +261,7 @@ def main():
     
     # Initialize synthesizer
     synthesizer = BedrockDataSynthesizer(
-        model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+        model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
         batch_size=3  # Generate 3 samples per API call
     )
     

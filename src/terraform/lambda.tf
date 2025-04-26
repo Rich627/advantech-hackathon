@@ -10,13 +10,12 @@ resource "aws_lambda_function" "llm_issue_handler" {
 
   environment {
     variables = {
-      OPENSEARCH_ENDPOINT = aws_opensearchserverless_collection.vdb_collection.collection_endpoint
+      OPENSEARCH_ENDPOINT = data.aws_opensearchserverless_collection.existing_collection.collection_endpoint
       BEDROCK_MODEL_ID = var.bedrock_model_id
     }
   }
 
   depends_on = [
-    aws_opensearchserverless_security_policy.vdb_encryption_policy,
     null_resource.docker_build_push["llm_issue_handler"]
   ]
 }
@@ -85,14 +84,13 @@ resource "aws_lambda_function" "pdf_ingest_handler" {
 
   environment {
     variables = {
-      OPENSEARCH_ENDPOINT = aws_opensearchserverless_collection.vdb_collection.collection_endpoint
+      OPENSEARCH_ENDPOINT = data.aws_opensearchserverless_collection.existing_collection.collection_endpoint
       BEDROCK_EMBEDDING_MODEL = var.bedrock_embedding_model
       OPENSEARCH_REGION = var.aws_region
     }
   }
 
   depends_on = [
-    aws_opensearchserverless_security_policy.vdb_encryption_policy,
     null_resource.docker_build_push["pdf_ingest_handler"]
   ]
 }

@@ -44,7 +44,6 @@ resource "aws_cloudfront_distribution" "main" {
     max_ttl                = 0
     compress               = true
 
-    web_acl_id = aws_wafv2_web_acl.main.arn
   }
 
   # improve the performance of the website by caching static files
@@ -102,7 +101,6 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   tags = {
-    Environment = var.environment
     Project     = "hackthon api"
   }
 }

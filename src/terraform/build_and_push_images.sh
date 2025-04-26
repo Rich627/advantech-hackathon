@@ -97,6 +97,12 @@ build_and_push() {
     # 不使用重試機制
     if docker push "$ECR_URL/$function_name:latest"; then
       echo "成功將 $function_name 推送到 ECR"
+      # 更新 Lambda function
+      echo "更新 Lambda function $function_name 使用最新 ECR image..."
+      aws lambda update-function-code \
+        --function-name "$function_name" \
+        --image-uri "$ECR_URL/$function_name:latest" \
+        --region "$AWS_REGION" | cat
     else
       echo "推送 $function_name 失敗"
       mv Dockerfile.bak Dockerfile
@@ -115,6 +121,12 @@ build_and_push() {
       if docker push "$ECR_URL/$function_name:latest"; then
         echo "成功將 $function_name 推送到 ECR"
         push_success=true
+        # 更新 Lambda function
+        echo "更新 Lambda function $function_name 使用最新 ECR image..."
+        aws lambda update-function-code \
+          --function-name "$function_name" \
+          --image-uri "$ECR_URL/$function_name:latest" \
+          --region "$AWS_REGION" | cat
       else
         echo "推送嘗試 $retry_count 失敗"
         if [ $retry_count -lt $max_retries ]; then
@@ -155,7 +167,12 @@ if [ $# -eq 0 ]; then
   # 沒有指定函數，構建所有函數
   echo "將構建和推送所有 Lambda 函數"
   for func in "${LAMBDA_FUNCTIONS[@]}"; do
-    build_and_push "$func" || echo "處理 $func 時出錯，繼續處理下一個函數"
+    echo "==== 開始處理 $func ===="
+    if ! build_and_push "$func"; then
+      echo "處理 $func 時出錯，繼續處理下一個函數"
+      # 清除任何可能的錯誤輸出
+      clear
+    fi
   done
 elif [ $# -eq 1 ]; then
   # 檢查提供的函數名稱是否有效
@@ -168,7 +185,10 @@ elif [ $# -eq 1 ]; then
   done
   
   if [ "$found" = true ]; then
-    build_and_push "$1" || exit 1
+    if ! build_and_push "$1"; then
+      echo "處理 $1 時出錯"
+      exit 1
+    fi
   else
     echo "錯誤: 不認識的函數名稱 '$1'"
     usage

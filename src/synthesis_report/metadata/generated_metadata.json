@@ -1,0 +1,44 @@
+[
+  {
+    "id": "issue_2025_04_26_14_56_43",
+    "timestamp": "2025-04-26  14:56:43",
+    "length": 150,
+    "width": 2,
+    "position": "mountain",
+    "material": "concrete",
+    "crack_type": "Longitudinal",
+    "crack_location": "A",
+    "image_url": "https://genai-hackthon-20250426-image-bucket/image/issue_2025_04_26_14_56_43.jpg",
+    "engineer": "張工程師",
+    "risk_level": "High",
+    "action": "對結構裂縫處進行表面打磨處理，並塗覆保護塗層提升耐久性。"
+  },
+  {
+    "id": "issue_2025_04_26_15_10_12",
+    "timestamp": "2025-04-26 15:10:12",
+    "length": 80,
+    "width": 5,
+    "position": "valley",
+    "material": "steel",
+    "crack_type": "Transverse",
+    "crack_location": "B",
+    "image_url": "https://s3.amazonaws.com/xxx/image/issue_2025_04_26_15_10_12.jpg",
+    "engineer": "李工程師",
+    "risk_level": "Medium",
+    "action": "對鋼結構橫向裂縫進行磁粉探傷檢測，確認裂縫深度與範圍。清除裂縫周圍鏽蝕，進行打磨處理後，採用特殊焊接技術修補裂縫。完成焊接後進行表面處理及防鏽塗層施工，最後執行超音波檢測確認修復品質。"
+  },
+  {
+    "id": "issue_2025_04_26_15_10_45",
+    "timestamp": "2025-04-26 15:10:45",
+    "length": 200,
+    "width": 12,
+    "position": "urban",
+    "material": "composite",
+    "crack_type": "Diagonal",
+    "crack_location": "F",
+    "image_url": "https://genai-hackthon-20250426-image-bucket/image/issue_2025_04_26_15_10_45.jpg",
+    "engineer": "王工程師",
+    "risk_level": "High",
+    "action": "使用高滲透性環氧樹脂進行灌漿修補，並在裂縫表面進行打磨以恢復結構完整性。"
+  }
+]

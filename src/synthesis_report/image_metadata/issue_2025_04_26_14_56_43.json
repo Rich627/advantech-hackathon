@@ -1,0 +1,11 @@
+{
+  "id": "issue_2025_04_26_14_56_43",
+  "timestamp": "2025-04-26  14:56:43",
+  "length": 150,
+  "width": 2,
+  "position": "mountain",
+  "material": "concrete",
+  "crack_type": "Longitudinal",
+  "crack_location": "A",
+  "image_url": "https://genai-hackthon-20250426-image-bucket/image/issue_2025_04_26_14_56_43.jpg"
+}

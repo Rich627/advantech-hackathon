@@ -1,56 +1,89 @@
+import json
 import boto3
-import botocore
 import os
 import logging
+import time
 
-# Configure logger
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-def notify_sns(message):
+def sns_notification(crack_location, report_key):
     """
-    Send a notification to an SNS topic
-    Parameters:
-        sns_client: Boto3 SNS client
-        message: Message to send
-    Returns:
-        Response from SNS publish call
+    This function is for sending notifications by using SNS.
     """
     try:
         sns_client = boto3.client('sns')
+        topic_arn = os.environ.get('SNS_TOPIC_ARN')
+
+        cloudfront_url = os.environ.get('CLOUDFRONT_URL')
+        present_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        report_url = f"{cloudfront_url}/report/{report_key}"
+        
+        
+        subject = f"[MAINTENANCE NOTIFICATION] Tunnel {crack_location}  Maintenance"
+        message = f"""
+Dear User,
+
+This is to inform you that our automated monitoring systems have detected a structural anomaly (crack formation) in Tunnel {crack_location}. An emergency maintenance operation has been scheduled to address this issue.
+
+MAINTENANCE DETAILS:
+• Issue: Structural crack detected
+• Location: Section {crack_location}, west-facing wall
+• Severity: Requiring immediate attention
+• Maintenance Start: {present_time} (UTC+8)
+• Expected Duration: 4-6 hours
+• Service Impact: Access to affected tunnel section will be restricted; expect detours and delays
+
+SAFETY MEASURES:
+Our engineering team has implemented temporary reinforcement measures while a permanent repair solution is being deployed. All safety protocols have been activated.
+
+DETAILED REPORT:
+For comprehensive information including structural assessment and repair methodology, please access the full technical report:
+→ {report_url}
+
+We appreciate your understanding as we prioritize safety and structural integrity. Please plan your routes accordingly.
+
+Regards,
+Infrastructure Safety & Maintenance Division
+Emergency Response Team
+        """
+
+        # send SNS notification
         response = sns_client.publish(
-            TopicArn=os.environ['SNS_TOPIC_ARN'],
-            Message=message,
-            Subject='【警告】設備異常檢測'
+            TopicArn=topic_arn,
+            Subject=subject,
+            Message=message
         )
-        return response
-    except botocore.exceptions.ClientError as e:
-        logger.error(f"Failed to send SNS notification: {e}")
-        raise
+
+        logging.info("SNS Notification sent successfully.")
+        logging.info("Response: %s", response)
+        logging.info("Message ID: %s", response['MessageId'])
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Notification sent successfully!')
+        }
+    except Exception as e:
+        print(f"Error sending notification: {e}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps('Failed to send notification')
+        }
 
 def lambda_handler(event, context):
     """
-    Main Lambda handler function
-    Parameters:
-        event: Dict containing the Lambda function event data
-        context: Lambda runtime context
-    Returns:
-        Dict containing status message
+    Lambda function entry point.
     """
     try:
-        # get message from event(send from llm_issue_handler)
-        message = event['Records'][0]['Sns']['Message']
-        logger.info(f"Received message: {message}")
-        # Notify SNS with the message
-        response = notify_sns(message)
-        logger.info(f"SNS response: {response}")    
-        return {
-            'statusCode': 200,
-            'body': 'Notification sent successfully'
-        }
+        tunnel_id = event.get('tunnel_id')
+        report_key = event.get('object_key')
+        if not tunnel_id or not report_key:
+            return {
+                'statusCode': 400,
+                'body': json.dumps('Missing tunnel_id or object_key in the event')
+            }
+        # Call the SNS notification function
+        return sns_notification(tunnel_id, report_key)
     except Exception as e:
-        logger.error(f"Error processing event: {e}")
+        print(f"Error in lambda_handler: {e}")
         return {
             'statusCode': 500,
-            'body': 'Error processing event'
+            'body': json.dumps('Error processing the event')
         }

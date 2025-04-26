@@ -1,9 +1,9 @@
 {
-  "id": "issue_001",
+  "id": "issue_2023_10_27_10_00_00",
   "timestamp": "2023-10-27 10:00:00",
   "length": "15.5",
   "width": "10.2",
   "position": "mountain",
-  "Material": "cement",
+  "material": "concrete",
   "crack_location": "A"
 } 

@@ -7,7 +7,7 @@
   "material": "concrete",
   "crack_location": "A",
   "image_url": "https://s3.amazonaws.com/xxx/image/ISSUE-001.jpg",
-  "engineer": "張工程師", 
+  "engineer": "張工程師",
   "risk_level": "High",
   "action": "針對裂縫區域進行表面清潔與封閉作業，預留灌漿孔後，採用高壓設備注入環氧樹脂，使材料充分滲透裂縫內部，待樹脂固化後移除封層並整平表面，以恢復結構完整性並防止滲漏與劣化。"
 }

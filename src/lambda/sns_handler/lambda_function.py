@@ -4,7 +4,7 @@ import os
 import logging
 import time
 
-def sns_notification(tunnel_id, report_key):
+def sns_notification(crack_location, report_key):
     """
     This function is for sending notifications by using SNS.
     """
@@ -16,23 +16,33 @@ def sns_notification(tunnel_id, report_key):
         present_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         report_url = f"{cloudfront_url}/report/{report_key}"
         
-        subject = "[Emergency Maintenance Notification] Tunnel {tunnel_id} System Maintenance"
+        
+        subject = f"[MAINTENANCE NOTIFICATION] Tunnel {crack_location}  Maintenance"
         message = f"""
 Dear User,
 
-We would like to inform you that an emergency maintenance operation has been scheduled for Tunnel XX.
-The maintenance details are as follows:
+This is to inform you that our automated monitoring systems have detected a structural anomaly (crack formation) in Tunnel {crack_location}. An emergency maintenance operation has been scheduled to address this issue.
 
-- Start Time: {present_time} (UTC+8)
-- Impact: During this period, access to Tunnel {tunnel_id} services may be temporarily interrupted or experience instability.
+MAINTENANCE DETAILS:
+• Issue: Structural crack detected
+• Location: Section {crack_location}, west-facing wall
+• Severity: Requiring immediate attention
+• Maintenance Start: {present_time} (UTC+8)
+• Expected Duration: 4-6 hours
+• Service Impact: Access to affected tunnel section will be restricted; expect detours and delays
 
-For more information, please refer to the maintenance status page:
-👉 {report_url}
+SAFETY MEASURES:
+Our engineering team has implemented temporary reinforcement measures while a permanent repair solution is being deployed. All safety protocols have been activated.
 
-We apologize for any inconvenience and appreciate your understanding.
+DETAILED REPORT:
+For comprehensive information including structural assessment and repair methodology, please access the full technical report:
+→ {report_url}
 
-Best regards,
-Operations Team
+We appreciate your understanding as we prioritize safety and structural integrity. Please plan your routes accordingly.
+
+Regards,
+Infrastructure Safety & Maintenance Division
+Emergency Response Team
         """
 
         # send SNS notification

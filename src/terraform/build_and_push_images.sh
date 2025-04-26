@@ -98,9 +98,9 @@ build_and_push() {
     if docker push "$ECR_URL/$function_name:latest"; then
       echo "成功將 $function_name 推送到 ECR"
       # 更新 Lambda function
-      echo "更新 Lambda function $function_name 使用最新 ECR image..."
+      echo "更新 Lambda function presigned_url_generator 使用最新 ECR image..."
       aws lambda update-function-code \
-        --function-name "$function_name" \
+        --function-name "presigned_url_generator" \
         --image-uri "$ECR_URL/$function_name:latest" \
         --region "$AWS_REGION" | cat
     else
@@ -122,9 +122,9 @@ build_and_push() {
         echo "成功將 $function_name 推送到 ECR"
         push_success=true
         # 更新 Lambda function
-        echo "更新 Lambda function $function_name 使用最新 ECR image..."
+        echo "更新 Lambda function presigned_url_generator 使用最新 ECR image..."
         aws lambda update-function-code \
-          --function-name "$function_name" \
+          --function-name "presigned_url_generator" \
           --image-uri "$ECR_URL/$function_name:latest" \
           --region "$AWS_REGION" | cat
       else

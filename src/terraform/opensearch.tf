@@ -1,27 +1,8 @@
 ################################################
 ####### OpenSearch Serverless Configuration ####
 ################################################
-
-# OpenSearch Serverless encryption policy
-resource "aws_opensearchserverless_security_policy" "vdb_encryption_policy" {
-  name        = "icam-vdb-encryption"
-  type        = "encryption"
-  policy      = jsonencode({
-    Rules = [{
-      ResourceType = "collection",
-      Resource = ["collection/icam-vectors"]
-    }],
-    AWSOwnedKey = true
-  })
-}
-
-# OpenSearch Serverless collection
-resource "aws_opensearchserverless_collection" "vdb_collection" {
-  name        = "icam-vectors"
-  type        = "VECTORSEARCH"
-  description = "vector search collection for equipment management system"
-  
-  depends_on = [aws_opensearchserverless_security_policy.vdb_encryption_policy]
+data "aws_opensearchserverless_collection" "existing_collection" {
+  name = "report-vector"
 }
 
 # OpenSearch Serverless data access policy for search and write
@@ -33,7 +14,7 @@ resource "aws_opensearchserverless_access_policy" "vdb_data_access_policy" {
       Rules = [
         {
           ResourceType = "collection",
-          Resource    = ["collection/icam-vectors"],
+          Resource    = ["collection/report-vector"],
           Permission  = [
             "aoss:CreateCollectionItems", 
             "aoss:DeleteCollectionItems", 
@@ -45,7 +26,7 @@ resource "aws_opensearchserverless_access_policy" "vdb_data_access_policy" {
         },
         {
           ResourceType = "index",
-          Resource    = ["index/icam-vectors/*"],
+          Resource    = ["index/report-vector/*"],
           Permission  = [
             "aoss:CreateIndex",
             "aoss:DeleteIndex",
@@ -63,7 +44,7 @@ resource "aws_opensearchserverless_access_policy" "vdb_data_access_policy" {
     }
   ])
 
-  depends_on = [aws_opensearchserverless_collection.vdb_collection]
+  depends_on = [data.aws_opensearchserverless_collection.existing_collection]
 }
 
 # OpenSearch Serverless network policy
@@ -75,17 +56,15 @@ resource "aws_opensearchserverless_security_policy" "vdb_network_policy" {
       Rules = [
         {
           ResourceType = "collection",
-          Resource    = ["collection/icam-vectors"]
+          Resource    = ["collection/report-vector"]
         }
       ],
       # public access allowed, but only services/roles with permissions from other policies can access
       AllowFromPublic = true
-    #   AllowFromPublic = false,
-    #   SourceVPCEs = [var.vpc_endpoint_id]
     }
   ])
 
-  depends_on = [aws_opensearchserverless_collection.vdb_collection]
+  depends_on = [data.aws_opensearchserverless_collection.existing_collection]
 }
 
 

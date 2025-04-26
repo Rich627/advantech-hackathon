@@ -26,5 +26,5 @@ resource "opensearch_index" "repair_reports" {
   })
 
   # 讓 Terraform 知道：必須等 collection 建好才能建 index
-  depends_on = [aws_opensearchserverless_collection.vdb_collection]
+  depends_on = [data.aws_opensearchserverless_collection.existing_collection]
 }

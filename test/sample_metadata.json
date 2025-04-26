@@ -5,5 +5,7 @@
   "width": "10.2",
   "position": "mountain",
   "material": "concrete",
-  "crack_location": "A"
+  "crack_type": "Longitudinal", //crack type range: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
+  "crack_location": "A", //crack location range: A to Z
+  "image_url": "https://s3.amazonaws.com/xxx/image/ISSUE-001.jpg"
 } 

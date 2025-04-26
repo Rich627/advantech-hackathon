@@ -1,56 +1,79 @@
+import json
 import boto3
-import botocore
 import os
 import logging
+import time
 
-# Configure logger
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-def notify_sns(message):
+def sns_notification(tunnel_id, report_key):
     """
-    Send a notification to an SNS topic
-    Parameters:
-        sns_client: Boto3 SNS client
-        message: Message to send
-    Returns:
-        Response from SNS publish call
+    This function is for sending notifications by using SNS.
     """
     try:
         sns_client = boto3.client('sns')
+        topic_arn = os.environ.get('SNS_TOPIC_ARN')
+
+        cloudfront_url = os.environ.get('CLOUDFRONT_URL')
+        present_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        report_url = f"{cloudfront_url}/report/{report_key}"
+        
+        subject = "[Emergency Maintenance Notification] Tunnel {tunnel_id} System Maintenance"
+        message = f"""
+Dear User,
+
+We would like to inform you that an emergency maintenance operation has been scheduled for Tunnel XX.
+The maintenance details are as follows:
+
+- Start Time: {present_time} (UTC+8)
+- Impact: During this period, access to Tunnel {tunnel_id} services may be temporarily interrupted or experience instability.
+
+For more information, please refer to the maintenance status page:
+👉 {report_url}
+
+We apologize for any inconvenience and appreciate your understanding.
+
+Best regards,
+Operations Team
+        """
+
+        # send SNS notification
         response = sns_client.publish(
-            TopicArn=os.environ['SNS_TOPIC_ARN'],
-            Message=message,
-            Subject='【警告】設備異常檢測'
+            TopicArn=topic_arn,
+            Subject=subject,
+            Message=message
         )
-        return response
-    except botocore.exceptions.ClientError as e:
-        logger.error(f"Failed to send SNS notification: {e}")
-        raise
+
+        logging.info("SNS Notification sent successfully.")
+        logging.info("Response: %s", response)
+        logging.info("Message ID: %s", response['MessageId'])
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Notification sent successfully!')
+        }
+    except Exception as e:
+        print(f"Error sending notification: {e}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps('Failed to send notification')
+        }
 
 def lambda_handler(event, context):
     """
-    Main Lambda handler function
-    Parameters:
-        event: Dict containing the Lambda function event data
-        context: Lambda runtime context
-    Returns:
-        Dict containing status message
+    Lambda function entry point.
     """
     try:
-        # get message from event(send from llm_issue_handler)
-        message = event['Records'][0]['Sns']['Message']
-        logger.info(f"Received message: {message}")
-        # Notify SNS with the message
-        response = notify_sns(message)
-        logger.info(f"SNS response: {response}")    
-        return {
-            'statusCode': 200,
-            'body': 'Notification sent successfully'
-        }
+        tunnel_id = event.get('tunnel_id')
+        report_key = event.get('object_key')
+        if not tunnel_id or not report_key:
+            return {
+                'statusCode': 400,
+                'body': json.dumps('Missing tunnel_id or object_key in the event')
+            }
+        # Call the SNS notification function
+        return sns_notification(tunnel_id, report_key)
     except Exception as e:
-        logger.error(f"Error processing event: {e}")
+        print(f"Error in lambda_handler: {e}")
         return {
             'statusCode': 500,
-            'body': 'Error processing event'
+            'body': json.dumps('Error processing the event')
         }

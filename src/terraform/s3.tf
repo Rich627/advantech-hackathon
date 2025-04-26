@@ -2,7 +2,7 @@
 ### AWS S3 Bucket for History Report Storage ###
 ################################################
 resource "aws_s3_bucket" "history_report_bucket" {
-  bucket = "genai-hackthon-20250426-history-report-bucket-tf"
+  bucket = "genai-hackthon-20250426-history-report-bucket"
 }
 
 resource "aws_iam_policy" "history_s3_access" {
@@ -36,7 +36,7 @@ resource "aws_iam_role_policy_attachment" "history_s3_attachment" {
 ### AWS S3 Bucket for Image from icam Storage ####
 ##################################################
 resource "aws_s3_bucket" "image_bucket" {
-  bucket = "genai-hackthon-20250426-image-bucket-tf"
+  bucket = "genai-hackthon-20250426-image-bucket"
 }
 
 # When the image is uploaded to the S3 bucket, it will trigger the Lambda function

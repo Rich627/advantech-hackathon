@@ -8,10 +8,10 @@
 
 ```json
 {
-  "id": "issue_2023_10_27_10_00_00", //issue id range: ISSUE-001 ~ ISSUE-999
-  "timestamp": "2023-10-27  10:00:00",
-  "length_cm": 150, //length range: 0 ~ 9999
-  "depth_cm": 2, //depth range: 0 ~ 9999
+  "id": "issue_2023_10_27_10_00_00",
+  "timestamp": "2023-10-27 10:00:00",
+  "length": "15.5",
+  "width": "10.2",
   "position": "mountain",
   "material": "concrete",
   "crack_type": "Longitudinal", //crack type range: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
@@ -21,10 +21,10 @@
 ```
 
 欄位說明：
-- `id`: 問題ID，格式為 issue_YYYY_MM_DD_HH_MM_SS，範圍 ISSUE-001 ~ ISSUE-999
+- `id`: 問題ID，格式為 issue_YYYY_MM_DD_HH_MM_SS
 - `timestamp`: 時間戳記，格式為 YYYY-MM-DD HH:MM:SS
-- `length_cm`: 裂縫長度（公分），範圍 0 ~ 9999
-- `depth_cm`: 裂縫深度（公分），範圍 0 ~ 9999
+- `length`: 裂縫長度
+- `width`: 裂縫寬度
 - `position`: 位置描述
 - `material`: 材質描述
 - `crack_type`: 裂縫類型，可選值：Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned

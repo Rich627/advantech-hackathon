@@ -134,39 +134,6 @@ def upload_to_s3(pdf_data, report_id):
     
     return s3_url
 
-def save_to_dynamodb(data, pdf_url):
-    """
-    將報告數據保存到 DynamoDB
-    
-    Parameters:
-        data: 報告數據
-        pdf_url: PDF 的 S3 URL
-    
-    Returns:
-        DynamoDB 項目 ID
-    """
-    report_id = data.get('report_id', str(uuid4()))
-    
-    dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(os.environ.get('REPORT_TABLE', 'equipment_reports'))
-    
-    # 創建 DynamoDB 項目
-    item = {
-        'id': report_id,
-        'timestamp': datetime.now().isoformat(),
-        'equipment': data.get('equipment', 'N/A'),
-        'department': data.get('department', 'N/A'),
-        'issue': data.get('issue', 'N/A'),
-        'analysis': data.get('analysis', 'N/A'),
-        'solution': data.get('solution', 'N/A'),
-        'pdf_url': pdf_url,
-        'status': 'new'
-    }
-    
-    table.put_item(Item=item)
-    
-    return report_id
-
 def lambda_handler(event, context):
     """
     API Gateway 觸發的 Lambda 函數，用於處理文檔請求並生成報告
@@ -217,9 +184,7 @@ def lambda_handler(event, context):
         
         # 上傳到 S3
         pdf_url = upload_to_s3(pdf_data, report_id)
-        
-        # 保存到 DynamoDB
-        save_to_dynamodb(data, pdf_url)
+    
         
         # 返回成功響應
         return {

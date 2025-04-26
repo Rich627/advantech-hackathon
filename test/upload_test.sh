@@ -2,43 +2,42 @@
 
 # 設定變數
 BUCKET_NAME="your-bucket-name"  # 請替換成您的S3儲存桶名稱
-TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
-ISSUE_ID="issue_001"
-ISSUE_FOLDER="issues/issue_${TIMESTAMP}"
+ISSUE_ID="ISSUE-001"
+DATE=$(date "+%Y-%m-%d")
+ISSUE_FOLDER="issues/${ISSUE_ID}"
 
 # 建立測試資料夾結構
 mkdir -p "test/${ISSUE_FOLDER}"
 
 # 建立metadata.json檔案
-cat > "test/${ISSUE_FOLDER}/metadata.json" << EOF
+cat > "test/${ISSUE_FOLDER}/${ISSUE_ID}.json" << EOF
 {
-  "id": "${ISSUE_ID}",
-  "timestamp": "${TIMESTAMP}",
-  "length": "15.5",
-  "width": "10.2",
-  "position": "mountain",
-  "Material": "cement",
-  "crack_location": "A"
+  "id": "${ISSUE_ID}", 
+  "location": "A1",
+  "crack_type": "Longitudinal", 
+  "length_cm": 150, 
+  "depth_cm": 2, 
+  "date": "${DATE}",
+  "image_url": "https://s3.amazonaws.com/${BUCKET_NAME}/image/${ISSUE_ID}.jpg"
 }
 EOF
 
 # 建立一個測試用的空白圖片檔案
-# 如果您有真實的圖片，請將此部分替換為複製您的圖片的指令
-touch "test/${ISSUE_FOLDER}/image.jpg"
+touch "test/${ISSUE_FOLDER}/${ISSUE_ID}.jpg"
 # 或者使用:
-# convert -size 100x100 xc:white "test/${ISSUE_FOLDER}/image.jpg"  # 需要ImageMagick
+# convert -size 100x100 xc:white "test/${ISSUE_FOLDER}/${ISSUE_ID}.jpg"  # 需要ImageMagick
 
 echo "測試檔案已建立在 test/${ISSUE_FOLDER} 資料夾中"
 
 # 上傳檔案到S3
 echo "開始上傳檔案到S3..."
 
-# 上傳metadata.json (先上傳，因為它會觸發Lambda函數)
-aws s3 cp "test/${ISSUE_FOLDER}/metadata.json" "s3://${BUCKET_NAME}/${ISSUE_FOLDER}/metadata.json"
+# 上傳metadata.json
+aws s3 cp "test/${ISSUE_FOLDER}/${ISSUE_ID}.json" "s3://${BUCKET_NAME}/${ISSUE_FOLDER}/${ISSUE_ID}.json"
 
-# 上傳image.jpg
-aws s3 cp "test/${ISSUE_FOLDER}/image.jpg" "s3://${BUCKET_NAME}/${ISSUE_FOLDER}/image.jpg"
+# 上傳圖片檔案
+aws s3 cp "test/${ISSUE_FOLDER}/${ISSUE_ID}.jpg" "s3://${BUCKET_NAME}/image/${ISSUE_ID}.jpg"
 
 echo "上傳完成！"
-echo "已上傳檔案到: s3://${BUCKET_NAME}/${ISSUE_FOLDER}/"
-echo "請檢查Lambda函數日誌來確認是否正確觸發及執行" 
+echo "已上傳檔案到: s3://${BUCKET_NAME}/${ISSUE_FOLDER}/ 和 s3://${BUCKET_NAME}/image/"
+echo "請檢查 Lambda 函數日誌來確認是否正確觸發及執行" 

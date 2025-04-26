@@ -1,9 +1,9 @@
 {
-  "id": "issue_001",
-  "timestamp": "2023-10-27 10:00:00",
-  "length": "15.5",
-  "width": "10.2",
-  "position": "mountain",
-  "Material": "cement",
-  "crack_location": "A"
+  "issue_id": "ISSUE-001", //issue id range: ISSUE-001 ~ ISSUE-999
+  "location": "A1",
+  "crack_type": "Longitudinal", //crack type range: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
+  "length_cm": 150, //length range: 0 ~ 9999
+  "depth_cm": 2, //depth range: 0 ~ 9999
+  "date": "2025-05-13",
+  "image_url": "https://s3.amazonaws.com/xxx/image/ISSUE-001.jpg"
 } 

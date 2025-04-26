@@ -54,7 +54,7 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
 resource "aws_lambda_permission" "allow_s3" {
   statement_id  = "AllowExecutionFromS3Bucket"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.pdf_ingest_handler.function_name
+  function_name = aws_lambda_function.llm_issue_handler.function_name
   principal     = "s3.amazonaws.com"
   source_arn    = aws_s3_bucket.image_bucket.arn
 }

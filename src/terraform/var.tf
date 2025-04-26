@@ -25,4 +25,5 @@ variable "bedrock_embedding_model" {
 variable "email_address" {
   description = "Email address for SNS notifications"
   type        = string
+  default     = "rich.liu627@gmail.com"
 }

@@ -56,23 +56,47 @@ def generate_report(report, image_path=None, output_path=None):
     c.setFont("NotoTC", 12)
     line_spacing = 20
 
+    # 嚴格按照提供的 schema 順序
     fields = [
-        ("報告編號", report["report_id"]),
-        ("位置", report["location"]),
-        ("裂縫類型", report["crack_type"]),
-        ("裂縫長度", f"{report['length_cm']} 公分"),
-        ("裂縫深度", f"{report['depth_cm']} 公分"),
+        ("報告編號", report["id"]),
+        ("時間戳記", report["timestamp"]),
+        ("裂縫長度", f"{report['length']} 公分"),
+        ("裂縫寬度", f"{report['width']} 公分"),
+        ("位置", report["position"]),
+        ("材料", report["material"]),
+        ("裂縫位置", report["crack_location"]),
         ("檢修人員", report["engineer"]),
-        ("檢修日期", report["date"]),
-        ("處理方式", report["action"]),
-        ("狀態", report["status"]),
-        ("處理說明", report["description"])
+        ("風險等級", report["risk_level"]),
+        ("處理方案", report["action"])
     ]
 
     # 繪製欄位
     for label, value in fields:
-        c.drawString(80, y, f"{label}：{value}")
-        y -= line_spacing
+        if label == "處理方案":
+            # 處理方案可能較長，需要特殊處理
+            y -= line_spacing  # 額外空間
+            c.drawString(80, y, f"{label}：")
+            y -= line_spacing
+            
+            # 處理長文字換行
+            text_width = width - 160  # 左右各留 80 點空間
+            c.setFont("NotoTC", 10)  # 使用較小的字型來顯示詳細內容
+            
+            # 每 40 個字元換行
+            text = value
+            while text:
+                if len(text) > 40:
+                    line = text[:40]
+                    text = text[40:]
+                else:
+                    line = text
+                    text = ""
+                c.drawString(80, y, line)
+                y -= line_spacing * 0.8  # 稍微縮小行距
+        else:
+            c.setFont("NotoTC", 12)
+            c.drawString(80, y, f"{label}：{value}")
+            y -= line_spacing
 
     c.save()
 

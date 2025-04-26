@@ -1,14 +1,13 @@
 {
-  "issue_id": "ISSUE-001", //issue id range: ISSUE-001 ~ ISSUE-999
-  "location": "A1", //location range: A1 ~ C3
-  "crack_type": "Longitudinal", //crack type range: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned
-  "length_cm": 150, //length range: 0 ~ 9999
-  "depth_cm": 2, //depth range: 0 ~ 9999
+  "id": "issue_2023_10_27_10_00_00",
+  "timestamp": "2023-10-27 10:00:00",
+  "length": "15.5",
+  "width": "10.2",
+  "position": "mountain",
+  "material": "concrete",
+  "crack_location": "A",
+  "image_url": "https://s3.amazonaws.com/xxx/image/ISSUE-001.jpg",
   "engineer": "張工程師", 
-  "risk_level": "High", //risk level range: Low, Medium, High
-  "date": "2025-05-13", 
-  "action": "灌漿修補",
-  "status": "Done", //status range: Done, In Progress, Not Started
-  "description": "發現縱向裂縫，立即進行灌漿修補。修補後進行強度測試，確認修復效果良好。",
-  "image_url": "https://s3.amazonaws.com/xxx/image/ISSUE-001.jpg"
+  "risk_level": "High",
+  "action": "針對裂縫區域進行表面清潔與封閉作業，預留灌漿孔後，採用高壓設備注入環氧樹脂，使材料充分滲透裂縫內部，待樹脂固化後移除封層並整平表面，以恢復結構完整性並防止滲漏與劣化。"
 }

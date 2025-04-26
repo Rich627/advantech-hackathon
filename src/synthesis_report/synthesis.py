@@ -34,14 +34,15 @@ class BedrockDataSynthesizer:
         prompt += f"我需要你生成 {num_to_generate} 筆新的裂縫報告資料，格式應該與以下範例相似，但內容要有變化且合理：\n\n"
         prompt += f"{json.dumps(data_samples, ensure_ascii=False, indent=2)}\n\n"
         prompt += "請注意以下欄位的限制：\n"
-        prompt += "- issue_id: 格式為 ISSUE-XXX，XXX為三位數字，範圍001-999\n"
-        prompt += "- location: 範圍 A1 ~ C3\n"
-        prompt += "- crack_type: 必須是以下其中之一: Longitudinal, Transverse, Diagonal, Radial, Annular, Rippled, Network, Turtle-shell patterned\n" 
-        prompt += "- length_cm: 範圍 0 ~ 9999\n"
-        prompt += "- depth_cm: 範圍 0 ~ 9999\n"
+        prompt += "- id: 格式為 issue_YYYY_MM_DD_HH_MM_SS\n"
+        prompt += "- timestamp: 格式為 YYYY-MM-DD HH:MM:SS\n"
+        prompt += "- length: 範圍 0 ~ 9999\n"
+        prompt += "- width: 範圍 0 ~ 9999\n"
+        prompt += "- position: 必須是以下其中之一: mountain, valley, urban\n"
+        prompt += "- material: 必須是以下其中之一: concrete, steel, composite\n"
+        prompt += "- crack_location: 範圍 A ~ Z\n"
         prompt += "- risk_level: 必須是以下其中之一: Low, Medium, High\n"
-        prompt += "- status: 必須是以下其中之一: Done, In Progress, Not Started\n"
-        prompt += "- date: 請生成合理的日期，格式為YYYY-MM-DD\n\n"
+        prompt += "- action: 必須是以下其中之一: 灌漿修補, 裂縫填充, 表面處理, 結構加固\n\n"
         prompt += f"請幫我生成 {num_to_generate} 筆新的資料，使用與範例相同的格式與欄位，但要有變化、合理且真實的資料。\n"
         prompt += "請直接返回有效的JSON格式陣列，不要有任何額外的文字說明。\n\n"
         prompt += "Assistant: "
@@ -111,36 +112,38 @@ class BedrockDataSynthesizer:
             print(f"Response text: {response_text[:500]}...")
             return []
     
-    def _validate_and_fix_data(self, data: List[Dict[Any, Any]], start_id: int = 1) -> List[Dict[Any, Any]]:
+    def _validate_and_fix_data(self, data: List[Dict[Any, Any]]) -> List[Dict[Any, Any]]:
         """Validate and fix any issues with the generated data."""
-        valid_locations = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3']
-        valid_crack_types = [
-            'Longitudinal', 'Transverse', 'Diagonal', 'Radial', 
-            'Annular', 'Rippled', 'Network', 'Turtle-shell patterned'
-        ]
+        valid_positions = ['mountain', 'valley', 'urban']
+        valid_materials = ['concrete', 'steel', 'composite']
         valid_risk_levels = ['Low', 'Medium', 'High']
-        valid_statuses = ['Done', 'In Progress', 'Not Started']
+        valid_actions = ['灌漿修補', '裂縫填充', '表面處理', '結構加固']
         
         valid_data = []
-        for i, item in enumerate(data):
-            # Generate proper issue_id
-            item_id = start_id + i
-            item['issue_id'] = f"ISSUE-{item_id:03d}"
+        for item in data:
+            # Generate proper id and timestamp
+            current_time = datetime.now()
+            item['id'] = f"issue_{current_time.strftime('%Y_%m_%d_%H_%M_%S')}"
+            item['timestamp'] = current_time.strftime('%Y-%m-%d %H:%M:%S')
             
-            # Validate location
-            if 'location' not in item or item['location'] not in valid_locations:
-                item['location'] = random.choice(valid_locations)
+            # Validate length and width
+            if 'length' not in item or not isinstance(item['length'], (int, float, str)) or float(item['length']) < 0 or float(item['length']) > 9999:
+                item['length'] = str(round(random.uniform(1, 100), 2))
                 
-            # Validate crack_type
-            if 'crack_type' not in item or item['crack_type'] not in valid_crack_types:
-                item['crack_type'] = random.choice(valid_crack_types)
+            if 'width' not in item or not isinstance(item['width'], (int, float, str)) or float(item['width']) < 0 or float(item['width']) > 9999:
+                item['width'] = str(round(random.uniform(1, 50), 2))
             
-            # Validate length_cm and depth_cm
-            if 'length_cm' not in item or not isinstance(item['length_cm'], (int, float)) or item['length_cm'] < 0 or item['length_cm'] > 9999:
-                item['length_cm'] = random.randint(10, 500)
-                
-            if 'depth_cm' not in item or not isinstance(item['depth_cm'], (int, float)) or item['depth_cm'] < 0 or item['depth_cm'] > 9999:
-                item['depth_cm'] = random.randint(1, 50)
+            # Validate position
+            if 'position' not in item or item['position'] not in valid_positions:
+                item['position'] = random.choice(valid_positions)
+            
+            # Validate material
+            if 'material' not in item or item['material'] not in valid_materials:
+                item['material'] = random.choice(valid_materials)
+            
+            # Validate crack_location
+            if 'crack_location' not in item or not item['crack_location'].isalpha() or len(item['crack_location']) != 1:
+                item['crack_location'] = random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
             
             # Validate engineer
             if 'engineer' not in item or not item['engineer']:
@@ -149,63 +152,33 @@ class BedrockDataSynthesizer:
             
             # Validate risk_level
             if 'risk_level' not in item or item['risk_level'] not in valid_risk_levels:
-                # Calculate based on length and depth
-                if item['length_cm'] > 100 or item['depth_cm'] > 5:
-                    item['risk_level'] = "High"
-                elif item['length_cm'] > 50 or item['depth_cm'] > 2:
-                    item['risk_level'] = "Medium"
-                else:
-                    item['risk_level'] = "Low"
-            
-            # Validate date
-            if 'date' not in item:
-                # Generate random date in the last year
-                days_ago = random.randint(1, 365)
-                random_date = datetime.now() - timedelta(days=days_ago)
-                item['date'] = random_date.strftime("%Y-%m-%d")
-            
-            # Validate status
-            if 'status' not in item or item['status'] not in valid_statuses:
-                item['status'] = random.choice(valid_statuses)
+                item['risk_level'] = random.choice(valid_risk_levels)
             
             # Validate action
-            if 'action' not in item or not item['action']:
-                actions = ["灌漿修補", "裂縫填充", "表面處理", "結構加固", "防水處理", "觀察監測"]
-                item['action'] = random.choice(actions)
-            
-            # Validate description
-            if 'description' not in item or not item['description']:
-                descriptions = [
-                    f"發現{item['crack_type']}裂縫，進行{item['action']}。",
-                    f"隧道{item['location']}區段出現{item['crack_type']}裂縫，長度{item['length_cm']}公分，深度{item['depth_cm']}公分，已{item['action']}。",
-                    f"{item['engineer']}於{item['date']}發現裂縫，評估為{item['risk_level']}風險，進行{item['action']}。",
-                    f"裂縫長度{item['length_cm']}公分，深度{item['depth_cm']}公分，屬於{item['risk_level']}風險等級，需要{item['action']}。"
-                ]
-                item['description'] = random.choice(descriptions)
+            if 'action' not in item or item['action'] not in valid_actions:
+                item['action'] = random.choice(valid_actions)
             
             # Add image_url if not present
             if 'image_url' not in item:
-                item['image_url'] = f"https://s3.amazonaws.com/xxx/image/{item['issue_id']}.jpg"
+                item['image_url'] = f"https://s3.amazonaws.com/xxx/image/{item['id']}.jpg"
             
             valid_data.append(item)
         
         return valid_data
         
-    def generate_data(self, base_samples: List[Dict[Any, Any]], total_count: int, start_id: int = 1) -> List[Dict[Any, Any]]:
+    def generate_data(self, base_samples: List[Dict[Any, Any]], total_count: int) -> List[Dict[Any, Any]]:
         """
         Generate synthetic data based on provided samples.
         
         Args:
             base_samples: List of sample data dictionaries to use as reference
             total_count: Total number of new samples to generate
-            start_id: Starting ID number for generated samples
             
         Returns:
             List of generated data dictionaries
         """
         all_generated_data = []
         remaining = total_count
-        current_id = start_id
         
         print(f"Generating {total_count} synthetic data samples in batches of {self.batch_size}")
         
@@ -232,9 +205,7 @@ class BedrockDataSynthesizer:
                     print(f"Warning: Requested {batch_size} samples but only received {len(batch_data)}")
                 
                 # Validate and fix data
-                valid_batch = self._validate_and_fix_data(batch_data, current_id)
-                current_id += len(valid_batch)
-                
+                valid_batch = self._validate_and_fix_data(batch_data)
                 all_generated_data.extend(valid_batch)
                 remaining -= len(valid_batch)
                 

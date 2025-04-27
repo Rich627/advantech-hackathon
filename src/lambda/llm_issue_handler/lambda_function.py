@@ -10,9 +10,9 @@ import boto3
 import botocore
 import requests
 from langchain.chains.retrieval_qa.base import RetrievalQA
-from langchain_community.embeddings import BedrockEmbeddings
 from langchain_community.chat_models import BedrockChat
 from langchain.prompts import PromptTemplate
+from langchain_aws import BedrockEmbeddings
 from langchain_community.vectorstores import OpenSearchVectorSearch
 from opensearchpy import AWSV4SignerAuth, OpenSearch
 from opensearchpy.connection.http_requests import RequestsHttpConnection
@@ -119,22 +119,18 @@ def get_image_from_url(image_url):
 
 def initialize_multimodal_rag_chain(image_url=None):
     """
-    Initialize the RAG chain using Langchain with Bedrock multimodal components
+    Initialize both RAG chain for similar case retrieval and Nova Pro for image analysis
     Parameters:
         image_url: Optional URL of the image to analyze
     Returns:
-        Configured RAG chain and functions to call multimodal model
+        Tuple containing retriever for similar cases and function to call Nova Pro model
     """
     try:
         # Initialize Bedrock client
         bedrock_client = boto3.client('bedrock-runtime', region_name='us-west-2')
         
-        # Initialize Claude LLM
-        llm = BedrockChat(
-            client=bedrock_client,
-            model_id=os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-5-sonnet-20241022-v2:0'),
-            model_kwargs={"temperature": 0.1, "max_new_tokens": 2000}
-        )
+        # Initialize Nova Pro model ID
+        nova_model_id = os.environ.get('BEDROCK_MODEL_ID', 'amazon.nova-lite-v1:0')
         
         # Initialize Bedrock embeddings
         embeddings = BedrockEmbeddings(
@@ -146,134 +142,161 @@ def initialize_multimodal_rag_chain(image_url=None):
         host = "g9eu5n37g2c5goi6ymzh.us-west-2.aoss.amazonaws.com"
         region = "us-west-2"
         service = 'aoss'
+
         credentials = boto3.Session().get_credentials()
-        auth = AWSV4SignerAuth(credentials, region, service)
+
+        auth = AWS4Auth(
+            credentials.access_key,
+            credentials.secret_key,
+            region,
+            service,
+            session_token=credentials.token  # 一定要加 session token（尤其你是 Lambda）
+        )
 
         client = OpenSearch(
             hosts=[{'host': host, 'port': 443}],
-            http_auth=auth,
+            http_auth=auth,  # 這樣就正確
             use_ssl=True,
             verify_certs=True,
-            connection_class=RequestsHttpConnection,
+            connection_class=RequestsHttpConnection,  # 這邊不能錯
             pool_maxsize=20,
+            timeout=30,
+            request_timeout=30
         )
                 
         # 建立向量存儲
         vectorstore = OpenSearchVectorSearch(
-            opensearch_url=host,
-            index_name="vectors",
+            opensearch_url=f"https://{host}",
+            index_name = "report-vector/vectors",
             embedding_function=embeddings,
             opensearch_client=client
         )
         
-        # Create prompt template with focus on risk assessment and recommended action
-        prompt_template = """
-        你是一個專門分析混凝土裂縫問題的專家系統。
-
-        以下是從知識庫中找到的相關資訊：
-        {context}
-
-        現在請分析這個問題：{question}
-
-        請只提供以下兩項資訊：
-        1. 風險評估：評估此裂縫的風險等級（請明確標明是 "Low"、"Medium" 或 "High"），並簡短解釋評估理由。
-        2. 建議處理方式：提供具體的修復或處理建議。
-
-        請根據裂縫類型、位置、長度和寬度，並參考知識庫資訊進行專業判斷。
-        """
-        
-        PROMPT = PromptTemplate(
-            template=prompt_template,
-            input_variables=["context", "question"]
+        # Get retriever for similar cases
+        retriever = vectorstore.as_retriever(
+            search_kwargs={
+                "k": 3,  # Return top 3 similar cases
+                "return_metadata": True
+            }
         )
         
-        # Create QA chain
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            chain_type="stuff",
-            retriever=vectorstore.as_retriever(
-                search_kwargs={
-                    "k": 3,
-                    "return_metadata": True,
-                    "filter": None  # Can be used later for filtering by report_id
-                }
-            ),
-            chain_type_kwargs={"prompt": PROMPT},
-            return_source_documents=True  # This allows you to access the source documents with metadata
-        )
-        
-        # Define function to call multimodal model if image is available
+        # Define function to call Nova Pro model
         def call_multimodal_model(text_query, image_url):
             try:
+                logger.info(f"Starting multimodal analysis with Nova Pro")
+                logger.info(f"Input text query: {text_query}")
+                logger.info(f"Input image URL: {image_url}")
+
                 if not image_url:
+                    logger.warning("No image URL provided, skipping Nova Pro analysis")
                     return None
                 
                 # Get base64 encoded image
+                logger.info("Converting image to base64")
                 base64_image = get_image_from_url(image_url)
                 if not base64_image:
+                    logger.error("Failed to convert image to base64")
                     return None
-                
-                # Define multimodal prompt
-                multimodal_prompt = f"""
-                你是一個專門分析混凝土裂縫問題的專家系統。你有能力分析圖片中的裂縫狀況。
+                logger.info(f"Successfully converted image to base64 (length: {len(base64_image)})")
 
-                請仔細觀察提供的圖片，分析裂縫的嚴重程度和特性。
+                # Prepare Nova Pro prompt
+                logger.info("Preparing Nova Pro system prompt and message list")
+                system_list = [
+                    {
+                        "text": """你是一個專門分析混凝土裂縫問題的專家系統。你的任務是仔細觀察提供的圖片和相關資訊，分析裂縫的嚴重程度和特性。
 
-                以下是這個裂縫問題的基本資訊：
-                {text_query}
+請提供：
+1. 風險評估：評估此裂縫的風險等級（請明確標明是 "Low"、"Medium" 或 "High"）。
+2. 建議處理方式：提供具體的修復或處理建議。
 
-                根據以上資訊和圖片中裂縫的實際情況，請提供：
+請專注在風險評估和處理建議上，不需要提供其他分析。"""
+                    }
+                ]
 
-                1. 風險評估：評估此裂縫的風險等級（請明確標明是 "Low"、"Medium" 或 "High"）。
-                2. 建議處理方式：提供具體的修復或處理建議。
+                message_list = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "text": f"以下是這個裂縫問題的基本資訊：\n{text_query}",
+                                "type": "text"
+                            },
+                            {
+                                "data": base64_image,
+                                "type": "image"
+                            }
+                        ]
+                    }
+                ]
 
-                請專注在風險評估和處理建議上，不需要提供其他分析。
-                """
-                
-                # Prepare request payload for Claude 3.5 Sonnet Vision
-                payload = {
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_new_tokens": 1000,
+                # Configure inference parameters
+                logger.info("Configuring inference parameters")
+                inference_config = {
+                    "maxTokens": 2000,
                     "temperature": 0.1,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": multimodal_prompt
-                                },
-                                {
-                                    "type": "image",
-                                    "source": {
-                                        "type": "base64",
-                                        "media_type": "image/jpeg",
-                                        "data": base64_image
-                                    }
-                                }
-                            ]
-                        }
-                    ]
+                    "topP": 0.9,
+                    "stopSequences": []
+                }
+
+                # Prepare request body
+                request_body = {
+                    "schemaVersion": "messages-v1",
+                    "messages": message_list,
+                    "system": system_list,
+                    "inferenceConfig": inference_config
                 }
                 
-                vision_model_id = os.environ.get('BEDROCK_VISION_MODEL_ID', 'us.amazon.nova-pro-v1:0')
+                logger.info("Prepared request body for Nova Pro")
                 
-                # Call Bedrock Runtime
-                response = bedrock_client.invoke_model(
-                    modelId=vision_model_id,
-                    body=json.dumps(payload)
-                )
+                # Log model ID being used
+                nova_model_id = os.environ.get('BEDROCK_MODEL_ID', 'amazon.nova-lite-v1:0')
+                logger.info(f"Using Nova Pro model ID: {nova_model_id}")
+                
+                # Invoke Nova Pro model
+                logger.info("Invoking Nova Pro model")
+                try:
+                    response = bedrock_client.invoke_model(
+                        modelId=nova_model_id,
+                        body=json.dumps(request_body)
+                    )
+                    logger.info("Successfully received response from Nova Pro")
+                except Exception as e:
+                    logger.error(f"Error invoking Nova Pro model: {str(e)}")
+                    raise
                 
                 # Parse response
-                response_body = json.loads(response.get('body').read())
-                return response_body.get('content')[0].get('text')
+                try:
+                    response_body = json.loads(response.get('body').read())
+                    model_response = response_body.get('content')[0].get('text')
+                    logger.info(f"Successfully parsed Nova Pro response. Response preview: {model_response[:200]}...")
+                    
+                    # Log risk level detection
+                    if "風險評估" in model_response:
+                        risk_matches = {
+                            "High": ["High", "高風險", "高"],
+                            "Medium": ["Medium", "中風險", "中"],
+                            "Low": ["Low", "低風險", "低"]
+                        }
+                        for level, keywords in risk_matches.items():
+                            if any(keyword in model_response for keyword in keywords):
+                                logger.info(f"Detected risk level: {level}")
+                                break
+                    else:
+                        logger.warning("Could not detect explicit risk level in response")
+                    
+                    return model_response
+                except Exception as e:
+                    logger.error(f"Error parsing Nova Pro response: {str(e)}")
+                    logger.error(f"Raw response body: {response.get('body').read()}")
+                    raise
+                
             except Exception as e:
-                logger.error(f"Error calling multimodal model: {e}")
+                logger.error(f"Error in call_multimodal_model: {str(e)}")
                 return None
         
-        return qa_chain, call_multimodal_model
+        return retriever, call_multimodal_model
     except Exception as e:
-        logger.error(f"Error initializing RAG chain: {e}")
+        logger.error(f"Error initializing multimodal chain: {e}")
         raise
 
 def validate_and_format_data(issue_data, solution, multimodal_solution=None):
@@ -430,7 +453,7 @@ def store_in_dynamodb(issue_data, solution):
 def lambda_handler(event, context):
     """
     When new folder with image & JSON metadata is created in S3, this lambda will be triggered
-    to call Bedrock model for generating solution with knowledge base using Langchain RAG.
+    to call Nova Pro model for analyzing concrete cracks and find similar cases using RAG.
     Parameters:
         event: Dict containing the Lambda function event data
         context: Lambda runtime context
@@ -523,63 +546,62 @@ def lambda_handler(event, context):
         else:
             logger.warning("未找到有效的圖片URL")
         
-        # Initialize and run RAG chain with multimodal capability
-        logger.info("Initializing RAG chain with multimodal support")
-        rag_chain, call_multimodal_model = initialize_multimodal_rag_chain()
+        # Initialize Nova Pro model and RAG retriever
+        logger.info("Initializing Nova Pro model and RAG retriever")
+        retriever, call_multimodal_model = initialize_multimodal_rag_chain()
         
-        # Run text-based RAG with metadata handling
-        logger.info("Running query through multimodal analysis")
+        # Find similar cases using RAG
+        logger.info("Finding similar cases using RAG")
+        try:
+            similar_docs = retriever.invoke(formatted_metadata)
+            logger.info(f"Successfully retrieved {len(similar_docs)} similar documents")
+        except Exception as e:
+            logger.error(f"Error retrieving similar documents: {str(e)}")
+            similar_docs = []
         
-        # Use run_manager to access source documents with metadata
-        # Comment out text-based RAG since we'll always have images
-        # logger.info("Running query through text-based RAG chain")
-        # rag_result = rag_chain({"query": formatted_metadata})
-        # text_solution = rag_result.get("result", "")
+        reference_ids = []
         
-        # Extract source documents and their metadata (including report_ids)
-        # source_docs = rag_result.get("source_documents", [])
-        source_report_ids = []
+        for doc in similar_docs:
+            if hasattr(doc, "metadata"):
+                # 優先使用 report_id
+                if "report_id" in doc.metadata:
+                    reference_ids.append(doc.metadata["report_id"])
+                    logger.info(f"Found reference report_id: {doc.metadata['report_id']}")
+                # 如果沒有 report_id，則嘗試使用 id
+                elif "id" in doc.metadata:
+                    reference_ids.append(doc.metadata["id"])
+                    logger.info(f"Found reference id: {doc.metadata['id']}")
         
-        # for doc in source_docs:
-        #     if hasattr(doc, "metadata") and "report_id" in doc.metadata:
-        #         source_report_ids.append(doc.metadata["report_id"])
+        if reference_ids:
+            logger.info(f"Found {len(reference_ids)} similar cases with reference IDs: {reference_ids}")
+        else:
+            logger.warning("No reference IDs found in similar documents")
         
-        # logger.info(f"Retrieved documents with report_ids: {source_report_ids}")
-        
-        # Add source report IDs to raw_data for future reference 
-        raw_data['reference_report_ids'] = source_report_ids
-        
-        # logger.info(f"Text-based RAG solution generated: {text_solution[:100]}...")
-        
-        # Run multimodal analysis if image is available
-        multimodal_solution = None
-        text_solution = ""  # Initialize as empty string since we're not using text-based RAG
+        # Run analysis with Nova Pro
+        logger.info("Running analysis with Nova Pro")
+        solution = None
         
         if image_url:
-            # 儲存原始 image_url 以便記錄
-            original_image_url = image_url
-            
-            logger.info(f"Running multimodal analysis on image: {image_url}")
-            multimodal_solution = call_multimodal_model(formatted_metadata, image_url)
-            if multimodal_solution:
-                logger.info(f"Multimodal solution generated: {multimodal_solution[:100]}...")
+            logger.info(f"Analyzing image and metadata with Nova Pro: {image_url}")
+            solution = call_multimodal_model(formatted_metadata, image_url)
+            if solution:
+                logger.info(f"Nova Pro analysis completed: {solution[:100]}...")
             else:
-                logger.warning("Failed to generate multimodal solution, falling back to default values")
-                # Since we're not using text-based RAG, we'll need a default message if multimodal fails
-                multimodal_solution = "無法分析圖片。建議處理方式：請專業工程師進行現場檢查。風險評估：Medium"
+                logger.warning("Failed to generate solution with Nova Pro, using default values")
+                solution = "無法分析圖片。建議處理方式：請專業工程師進行現場檢查。風險評估：Medium"
         else:
-            logger.warning("No image URL provided, cannot perform multimodal analysis")
-            multimodal_solution = "無圖片提供。建議處理方式：請專業工程師進行現場檢查。風險評估：Medium"
+            logger.warning("No image URL provided, cannot perform analysis")
+            solution = "無圖片提供。建議處理方式：請專業工程師進行現場檢查。風險評估：Medium"
         
-        # Store in DynamoDB using the raw data extracted from JSON
+        # Store in DynamoDB using the raw data and Nova Pro solution
         logger.info("Storing data in DynamoDB")
         
-        # Validate and format data with both solutions
-        formatted_data = validate_and_format_data(raw_data, text_solution, multimodal_solution)
+        # Validate and format data
+        formatted_data = validate_and_format_data(raw_data, "", solution)
         
-        # Add reference_report_ids to the formatted data for DynamoDB
-        if source_report_ids:
-            formatted_data['reference_report_ids'] = source_report_ids
+        # Add reference IDs to the formatted data
+        if reference_ids:
+            formatted_data['reference_ids'] = reference_ids
         
         # Convert numeric values to Decimal for DynamoDB compatibility
         if 'length' in formatted_data:
@@ -599,7 +621,7 @@ def lambda_handler(event, context):
             'body': json.dumps({
                 'message': 'Analysis completed and data stored successfully',
                 'issue_id': formatted_data['id'],
-                'reference_report_ids': source_report_ids
+                'reference_ids': reference_ids
             })
         }
     except Exception as e:

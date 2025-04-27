@@ -11,7 +11,7 @@ LAMBDA_FUNCTIONS=(
   "pdf_ingest_handler"
   "render_frontend"
   "complete"
-  "presigned_url"
+  # "presigned_url"
 )
 NO_RETRY=${NO_RETRY:-false}  # 新增: 控制是否禁用重試機制的環境變量
 
@@ -100,7 +100,7 @@ build_and_push() {
       # 更新 Lambda function
       echo "更新 Lambda function presigned_url_generator 使用最新 ECR image..."
       aws lambda update-function-code \
-        --function-name "presigned_url_generator" \
+        --function-name "$function_name" \
         --image-uri "$ECR_URL/$function_name:latest" \
         --region "$AWS_REGION" | cat
     else

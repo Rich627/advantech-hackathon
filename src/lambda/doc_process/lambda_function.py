@@ -44,6 +44,7 @@ def lambda_handler(event, context):
         logger.info("Received event: %s", json.dumps(event))
 
         # 解析 body
+        is_base64_encoded = event.get("isBase64Encoded", False)
         body = event.get("body", None)
         if not body:
             raise ValueError("No body found in request")
@@ -53,17 +54,20 @@ def lambda_handler(event, context):
         #     raise ValueError("Expected body to be base64 encoded")
 
         # base64 decode 拿到 PDF bytes
-        pdf_data = (
-            event["body"].encode("utf-8")
-            if isinstance(event["body"], str)
-            else event["body"]
-        )
+        if is_base64_encoded:
+            pdf_data = base64.b64decode(body)
+        else:
+            if isinstance(body, str):
+                pdf_data = body.encode("utf-8")
+            else:
+                pdf_data = body
 
         # 產生一個新的 report_id
         # report_id = str(uuid4())
         filename = event.get("headers", {}).get("x-filename")
         if not filename:
             raise ValueError("Missing x-filename header")
+        filename = os.path.splitext(filename)[0]
 
         # 上傳到 S3
         pdf_url = upload_to_s3(pdf_data, filename)

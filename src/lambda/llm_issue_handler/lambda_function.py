@@ -130,7 +130,7 @@ def initialize_multimodal_rag_chain(image_url=None):
         bedrock_client = boto3.client('bedrock-runtime', region_name='us-west-2')
         
         # Initialize Nova Pro model ID
-        nova_model_id = os.environ.get('BEDROCK_MODEL_ID', 'amazon.nova-lite-v1:0')
+        nova_model_id = os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-5-sonnet-20241022-v2:0')
         
         # Initialize Bedrock embeddings
         embeddings = BedrockEmbeddings(
@@ -167,7 +167,7 @@ def initialize_multimodal_rag_chain(image_url=None):
         # 建立向量存儲
         vectorstore = OpenSearchVectorSearch(
             opensearch_url=f"https://{host}",
-            index_name = "report-vector/vectors",
+            index_name = "vectors",
             embedding_function=embeddings,
             opensearch_client=client
         )
@@ -249,7 +249,7 @@ def initialize_multimodal_rag_chain(image_url=None):
                 logger.info("Prepared request body for Nova Pro")
                 
                 # Log model ID being used
-                nova_model_id = os.environ.get('BEDROCK_MODEL_ID', 'amazon.nova-lite-v1:0')
+                nova_model_id = os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-5-sonnet-20241022-v2:0')
                 logger.info(f"Using Nova Pro model ID: {nova_model_id}")
                 
                 # Invoke Nova Pro model

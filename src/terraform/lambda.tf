@@ -13,7 +13,7 @@ resource "aws_lambda_function" "llm_issue_handler" {
   environment {
     variables = {
       OPENSEARCH_ENDPOINT = data.aws_opensearchserverless_collection.existing_collection.collection_endpoint
-      BEDROCK_MODEL_ID = var.bedrock_model_id
+      # BEDROCK_MODEL_ID = var.bedrock_model_id
     }
   }
 
@@ -297,4 +297,46 @@ resource "aws_iam_role_policy_attachment" "lambda_invoke_attachment" {
 resource "aws_iam_role_policy_attachment" "lambda_logs_attachment" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+}
+
+# for OpenSearch Serverless access
+resource "aws_iam_policy" "opensearch_serverless_access" {
+  name        = "lambda_opensearch_serverless_access"
+  description = "Allow Lambda functions to access OpenSearch Serverless"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = [
+          "aoss:APIAccessAll",
+          "aoss:BatchGetCollection",
+          "aoss:CreateCollection",
+          "aoss:GetCollection",
+          "aoss:CreateSecurityPolicy",
+          "aoss:GetSecurityPolicy",
+          "aoss:CreateAccessPolicy",
+          "aoss:GetAccessPolicy",
+          "aoss:BatchGetCollection",
+          "aoss:ListCollections",
+          "aoss:BatchGetVpcEndpoint",
+          "aoss:ListVpcEndpoints",
+          "aoss:CreateCollectionItems", 
+          "aoss:DeleteCollectionItems", 
+          "aoss:UpdateCollectionItems", 
+          "aoss:DescribeCollectionItems",
+          "aoss:ReadDocument",         
+          "aoss:SearchCollectionItems",
+          "aoss:WriteDocument"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "opensearch_serverless_attachment" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.opensearch_serverless_access.arn
 }

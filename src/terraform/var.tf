@@ -10,16 +10,17 @@ variable "aws_region" {
   default     = "us-west-2"
 }
 
-variable "bedrock_model_id" {
-  description = "Bedrock Model ID for LLM processing"
-  type        = string
-  default     = "anthropic.claude-3-sonnet-20240229-v1:0"
-}
+# variable "bedrock_model_id" {
+#   description = "Bedrock Model ID for LLM processing"
+#   type        = string
+#   default     = "anthropic.claude-3-sonnet-20240229-v1:0"
+# }
 
 variable "bedrock_embedding_model" {
   description = "Bedrock Model ID for embedding generation"
   type        = string
-  default     = "amazon.titan-embed-text-v1"
+  # default     = "amazon.titan-embed-text-v1"
+  default     = "amazon.titan-embed-text-v2:0"
 }
 
 variable "bucket_name" {

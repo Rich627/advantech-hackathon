@@ -4,15 +4,28 @@
 AWS_REGION="us-west-2"
 ECR_URL="467392743157.dkr.ecr.us-west-2.amazonaws.com"
 LAMBDA_FUNCTIONS=(
-  # "llm_issue_handler"
+  "analyze_with_llm"
   # "doc_process"
   # "util"
   # "sns_handler"
-  "pdf_ingest_handler"
-  "render_frontend"
-  "complete"
+  # "pdf_ingest_handler"
+  # "render_frontend"
+  # "complete"
   # "presigned_url"
 )
+
+# 添加 Lambda 函數名稱到 ECR 儲存庫名稱的映射
+declare -A ECR_REPO_MAPPING
+ECR_REPO_MAPPING["analyze_with_llm"]="llm_issue_handler"
+# 如有更多映射，請按照以下格式添加
+# ECR_REPO_MAPPING["lambda_function_name"]="ecr_repo_name"
+
+# 添加 Lambda 函數名稱到本地文件夾名稱的映射
+declare -A FOLDER_MAPPING
+FOLDER_MAPPING["analyze_with_llm"]="llm_issue_handler"
+# 如有更多映射，請按照以下格式添加
+# FOLDER_MAPPING["lambda_function_name"]="local_folder_name"
+
 NO_RETRY=${NO_RETRY:-false}  # 新增: 控制是否禁用重試機制的環境變量
 
 # 顯示使用方法
@@ -32,9 +45,17 @@ usage() {
 # 構建和推送單個函數的 Docker 映像
 build_and_push() {
   local function_name=$1
-  local lambda_path="../lambda/$function_name"
+  
+  # 獲取本地文件夾名稱，如果映射中存在則使用映射的名稱，否則使用函數名稱
+  local folder_name=${FOLDER_MAPPING[$function_name]:-$function_name}
+  local lambda_path="../lambda/$folder_name"
+  
+  # 獲取 ECR 儲存庫名稱，如果映射中存在則使用映射的名稱，否則使用函數名稱
+  local ecr_repo_name=${ECR_REPO_MAPPING[$function_name]:-$function_name}
   
   echo "==== 處理 $function_name ===="
+  echo "本地文件夾: $folder_name"
+  echo "ECR 儲存庫名稱: $ecr_repo_name"
   
   # 檢查 Lambda 函數目錄是否存在
   if [ ! -d "$lambda_path" ]; then
@@ -75,7 +96,7 @@ build_and_push() {
   
   # 構建 Docker 映像
   echo "為 $function_name 構建 Docker 映像..."
-  if ! DOCKER_BUILDKIT=1 docker build --platform=linux/amd64 -t "$function_name:latest" .; then
+  if ! DOCKER_BUILDKIT=1 docker build --platform=linux/amd64 -t "$ecr_repo_name:latest" .; then
     echo "為 $function_name 構建 Docker 映像失敗"
     # 恢復原始 Dockerfile
     mv Dockerfile.bak Dockerfile
@@ -84,7 +105,7 @@ build_and_push() {
   
   # 標記映像
   echo "為 $function_name 標記映像..."
-  if ! docker tag "$function_name:latest" "$ECR_URL/$function_name:latest"; then
+  if ! docker tag "$ecr_repo_name:latest" "$ECR_URL/$ecr_repo_name:latest"; then
     echo "為 $function_name 標記映像失敗"
     mv Dockerfile.bak Dockerfile
     return 1
@@ -95,13 +116,13 @@ build_and_push() {
   
   if [ "$NO_RETRY" = "true" ]; then
     # 不使用重試機制
-    if docker push "$ECR_URL/$function_name:latest"; then
+    if docker push "$ECR_URL/$ecr_repo_name:latest"; then
       echo "成功將 $function_name 推送到 ECR"
       # 更新 Lambda function
-      echo "更新 Lambda function ingest_daily_report 使用最新 ECR image..."
+      echo "更新 Lambda function $function_name 使用最新 ECR image..."
       aws lambda update-function-code \
         --function-name "$function_name" \
-        --image-uri "$ECR_URL/$function_name:latest" \
+        --image-uri "$ECR_URL/$ecr_repo_name:latest" \
         --region "$AWS_REGION" | cat
     else
       echo "推送 $function_name 失敗"
@@ -118,14 +139,14 @@ build_and_push() {
       retry_count=$((retry_count + 1))
       echo "推送嘗試 $retry_count / $max_retries..."
       
-      if docker push "$ECR_URL/$function_name:latest"; then
+      if docker push "$ECR_URL/$ecr_repo_name:latest"; then
         echo "成功將 $function_name 推送到 ECR"
         push_success=true
         # 更新 Lambda function
-        echo "更新 Lambda function ingest_daily_report 使用最新 ECR image..."
+        echo "更新 Lambda function $function_name 使用最新 ECR image..."
         aws lambda update-function-code \
-          --function-name "ingest_daily_report" \
-          --image-uri "$ECR_URL/$function_name:latest" \
+          --function-name "$function_name" \
+          --image-uri "$ECR_URL/$ecr_repo_name:latest" \
           --region "$AWS_REGION" | cat
       else
         echo "推送嘗試 $retry_count 失敗"

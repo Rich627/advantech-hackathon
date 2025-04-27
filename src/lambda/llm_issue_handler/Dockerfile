@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 amazon/aws-lambda-python:3.9
+FROM --platform=linux/amd64 amazon/aws-lambda-python:3.11
 
 # 複製函數程式碼
 COPY lambda_function.py ${LAMBDA_TASK_ROOT}

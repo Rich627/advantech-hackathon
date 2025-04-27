@@ -9,10 +9,11 @@ import boto3
 import botocore
 import requests
 from langchain.chains.retrieval_qa.base import RetrievalQA
-from langchain.embeddings import BedrockEmbeddings
-from langchain.llms.bedrock import Bedrock
+from langchain_community.embeddings import BedrockEmbeddings
+from langchain_community.chat_models import BedrockChat
 from langchain.prompts import PromptTemplate
-from langchain.vectorstores import OpenSearchVectorSearch
+from langchain_community.vectorstores import OpenSearchVectorSearch
+from opensearchpy import AWSV4SignerAuth, OpenSearch, RequestsHttpConnection
 
 # Configure logger
 logger = logging.getLogger()
@@ -122,10 +123,10 @@ def initialize_multimodal_rag_chain(image_url=None):
         bedrock_client = boto3.client('bedrock-runtime')
         
         # Initialize Claude LLM
-        llm = Bedrock(
+        llm = BedrockChat(
             client=bedrock_client,
             model_id=os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-5-sonnet-20241022-v2:0'),
-            model_kwargs={"temperature": 0.1, "max_tokens_to_sample": 2000}
+            model_kwargs={"temperature": 0.1, "max_tokens": 2000}
         )
         
         # Initialize Bedrock embeddings
@@ -134,21 +135,42 @@ def initialize_multimodal_rag_chain(image_url=None):
             model_id=os.environ.get('BEDROCK_EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0')
         )
         
-        # Initialize OpenSearch vector store
+        # Initialize OpenSearch vector store with AWS auth
         opensearch_url = os.environ.get('OPENSEARCH_ENDPOINT')
+        
+        # 解析OpenSearch URL來獲取主機名
+        if opensearch_url.startswith('https://'):
+            host = opensearch_url[8:]
+        else:
+            host = opensearch_url
+            
+        # 移除URL中的路徑和端口
+        if '/' in host:
+            host = host.split('/')[0]
+        if ':' in host:
+            host = host.split(':')[0]
+            
+        region = os.environ.get('AWS_REGION', 'us-west-2')
+        service = 'aoss'
+        credentials = boto3.Session().get_credentials()
+        auth = AWSV4SignerAuth(credentials, region, service)
+        
+        # 建立OpenSearch客戶端
+        opensearch_client = OpenSearch(
+            hosts=[{'host': host, 'port': 443}],
+            http_auth=auth,
+            use_ssl=True,
+            verify_certs=True,
+            connection_class=RequestsHttpConnection,
+            pool_maxsize=20,
+        )
+        
+        # 建立向量存儲
         vectorstore = OpenSearchVectorSearch(
             opensearch_url=opensearch_url,
             index_name="icam-vectors",
             embedding_function=embeddings,
-            vectorstore_kwargs={
-                "engine": "faiss",
-                "mapping": {
-                    "properties": {
-                        "report_id": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
-                        "vectors": {"type": "knn_vector", "dimension": 1024}
-                    }
-                }
-            }
+            opensearch_client=opensearch_client
         )
         
         # Create prompt template with focus on risk assessment and recommended action

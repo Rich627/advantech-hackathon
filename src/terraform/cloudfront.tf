@@ -3,7 +3,7 @@ resource "aws_cloudfront_distribution" "main" {
   is_ipv6_enabled     = true
   comment             = "Equipment Management Application"
   default_root_object = "index.html"
-  price_class         = "PriceClass_100" # 僅北美和歐洲
+  price_class         = "PriceClass_All" # all
   web_acl_id          = aws_wafv2_web_acl.main.arn
 
   # API Gateway Origin - only for API Gateway

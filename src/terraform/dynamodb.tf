@@ -1,15 +1,15 @@
 resource "aws_dynamodb_table" "reports" {
   name           = "issues"
   billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "issue_id"
+  hash_key       = "id"
 
   attribute {
-    name = "issue_id"
+    name = "id"
     type = "S"
   }
 
   attribute {
-    name = "date"
+    name = "timestamp"
     type = "S"
   }
 
@@ -18,26 +18,15 @@ resource "aws_dynamodb_table" "reports" {
     type = "S"
   }
 
-  attribute {
-    name = "status"
-    type = "S"
-  }
-
   global_secondary_index {
-    name            = "DateIndex"
-    hash_key        = "date"
+    name            = "TimestampIndex"
+    hash_key        = "timestamp"
     projection_type = "ALL"
   }
 
   global_secondary_index {
     name            = "RiskLevelIndex"
     hash_key        = "risk_level"
-    projection_type = "ALL"
-  }
-
-  global_secondary_index {
-    name            = "StatusIndex"
-    hash_key        = "status"
     projection_type = "ALL"
   }
 }

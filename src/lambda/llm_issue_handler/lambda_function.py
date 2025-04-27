@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from decimal import Decimal
+from urllib.parse import urlparse
 
 import boto3
 import botocore
@@ -13,7 +14,9 @@ from langchain_community.embeddings import BedrockEmbeddings
 from langchain_community.chat_models import BedrockChat
 from langchain.prompts import PromptTemplate
 from langchain_community.vectorstores import OpenSearchVectorSearch
-from opensearchpy import AWSV4SignerAuth, OpenSearch, RequestsHttpConnection
+from opensearchpy import AWSV4SignerAuth, OpenSearch
+from opensearchpy.connection.http_requests import RequestsHttpConnection
+from requests_aws4auth import AWS4Auth
 
 # Configure logger
 logger = logging.getLogger()
@@ -60,7 +63,7 @@ def parse_json_metadata(json_content):
         material = data.get('material', 'concrete')
         crack_type = data.get('crack_type', 'Longitudinal')
         crack_location = data.get('crack_location', 'A')
-        image_url = data.get('image_url', '')
+        image_url = data.get('url', '')
     
         #TODO 可能要改
         # Format the metadata string for RAG input
@@ -93,18 +96,22 @@ def get_image_from_url(image_url):
             bucket = parts[0]
             key = '/'.join(parts[1:])
             
+            logger.info(f"Accessing S3 object: bucket={bucket}, key={key}")
+            
             # Download from S3
             s3_client = boto3.client('s3')
             response = s3_client.get_object(Bucket=bucket, Key=key)
             image_content = response['Body'].read()
         else:
-            # Download from HTTP URL
+            # For HTTPS URLs
+            logger.info(f"Downloading image from URL: {image_url}")
             response = requests.get(image_url, timeout=10)
             response.raise_for_status()
             image_content = response.content
         
         # Convert to base64
         base64_image = base64.b64encode(image_content).decode('utf-8')
+        logger.info(f"Successfully converted image to base64 ({len(base64_image)} chars)")
         return base64_image
     except Exception as e:
         logger.error(f"Error getting image from URL {image_url}: {e}")
@@ -120,13 +127,13 @@ def initialize_multimodal_rag_chain(image_url=None):
     """
     try:
         # Initialize Bedrock client
-        bedrock_client = boto3.client('bedrock-runtime')
+        bedrock_client = boto3.client('bedrock-runtime', region_name='us-west-2')
         
         # Initialize Claude LLM
         llm = BedrockChat(
             client=bedrock_client,
             model_id=os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-5-sonnet-20241022-v2:0'),
-            model_kwargs={"temperature": 0.1, "max_tokens": 2000}
+            model_kwargs={"temperature": 0.1, "max_new_tokens": 2000}
         )
         
         # Initialize Bedrock embeddings
@@ -135,28 +142,14 @@ def initialize_multimodal_rag_chain(image_url=None):
             model_id=os.environ.get('BEDROCK_EMBEDDING_MODEL_ID', 'amazon.titan-embed-text-v2:0')
         )
         
-        # Initialize OpenSearch vector store with AWS auth
-        opensearch_url = os.environ.get('OPENSEARCH_ENDPOINT')
-        
-        # 解析OpenSearch URL來獲取主機名
-        if opensearch_url.startswith('https://'):
-            host = opensearch_url[8:]
-        else:
-            host = opensearch_url
-            
-        # 移除URL中的路徑和端口
-        if '/' in host:
-            host = host.split('/')[0]
-        if ':' in host:
-            host = host.split(':')[0]
-            
-        region = os.environ.get('AWS_REGION', 'us-west-2')
+        # OpenSearch connection settings
+        host = "g9eu5n37g2c5goi6ymzh.us-west-2.aoss.amazonaws.com"
+        region = "us-west-2"
         service = 'aoss'
         credentials = boto3.Session().get_credentials()
         auth = AWSV4SignerAuth(credentials, region, service)
-        
-        # 建立OpenSearch客戶端
-        opensearch_client = OpenSearch(
+
+        client = OpenSearch(
             hosts=[{'host': host, 'port': 443}],
             http_auth=auth,
             use_ssl=True,
@@ -164,13 +157,13 @@ def initialize_multimodal_rag_chain(image_url=None):
             connection_class=RequestsHttpConnection,
             pool_maxsize=20,
         )
-        
+                
         # 建立向量存儲
         vectorstore = OpenSearchVectorSearch(
-            opensearch_url=opensearch_url,
-            index_name="icam-vectors",
+            opensearch_url=host,
+            index_name="vectors",
             embedding_function=embeddings,
-            opensearch_client=opensearch_client
+            opensearch_client=client
         )
         
         # Create prompt template with focus on risk assessment and recommended action
@@ -240,7 +233,7 @@ def initialize_multimodal_rag_chain(image_url=None):
                 # Prepare request payload for Claude 3.5 Sonnet Vision
                 payload = {
                     "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 1000,
+                    "max_new_tokens": 1000,
                     "temperature": 0.1,
                     "messages": [
                         {
@@ -263,8 +256,7 @@ def initialize_multimodal_rag_chain(image_url=None):
                     ]
                 }
                 
-                # Claude 3 Sonnet Vision model
-                vision_model_id = os.environ.get('BEDROCK_VISION_MODEL_ID', 'amazon.nova-pro-v1:0')
+                vision_model_id = os.environ.get('BEDROCK_VISION_MODEL_ID', 'us.amazon.nova-pro-v1:0')
                 
                 # Call Bedrock Runtime
                 response = bedrock_client.invoke_model(
@@ -364,6 +356,10 @@ def validate_and_format_data(issue_data, solution, multimodal_solution=None):
         
         # 獲取圖片URL
         image_url = issue_data.get('image_url', '')
+        # 檢查 JSON 中是否有 url 欄位
+        if not image_url and 'url' in issue_data:
+            image_url = issue_data.get('url', '')
+            logger.info(f"使用 JSON 中的 url 欄位作為圖片 URL: {image_url}")
         
         # 獲取工程師
         engineer = issue_data.get('engineer', '張工程師')
@@ -468,43 +464,112 @@ def lambda_handler(event, context):
         logger.info(f"Metadata parsed: {formatted_metadata}")
         
         # Get image URL
-        image_url = raw_data.get('image_url', '')
+        image_url = raw_data.get('url', '')
+        if not image_url:
+            image_url = raw_data.get('image_url', '')
+            
+        logger.info(f"Original image URL from JSON: {image_url}")
+        
+        # 驗證 URL 是否有效
+        if not image_url:
+            logger.warning("JSON 中沒有提供 image_url 或 url 字段")
+        elif not (image_url.startswith('http://') or image_url.startswith('https://') or image_url.startswith('s3://')):
+            logger.warning(f"提供的 URL 格式無效: {image_url}")
+        
+        # 處理 HTTPS S3 URL，將其轉換為 S3 URI 格式
+        if image_url.startswith('https://') and 's3.amazonaws.com' in image_url:
+            # 針對特定的 bucket 進行處理
+            bucket_name = "genai-hackthon-20250426-image-bucket"
+            
+            # 處理不同格式的 S3 URL
+            try:
+                # 移除 URL 前面的協議部分
+                url_without_protocol = image_url.replace('https://', '')
+                
+                if f"{bucket_name}.s3.amazonaws.com/" in image_url:
+                    # 格式: https://bucket-name.s3.amazonaws.com/key
+                    object_key = url_without_protocol.split(f"{bucket_name}.s3.amazonaws.com/")[1]
+                elif f"s3.amazonaws.com/{bucket_name}/" in image_url:
+                    # 格式: https://s3.amazonaws.com/bucket-name/key
+                    object_key = url_without_protocol.split(f"s3.amazonaws.com/{bucket_name}/")[1]
+                else:
+                    # 嘗試從 URL 中獲取路徑部分
+                    parsed_url = urlparse(image_url)
+                    path_parts = parsed_url.path.strip('/').split('/')
+                    
+                    # 檢查路徑中是否包含 bucket_name
+                    if bucket_name in path_parts:
+                        bucket_index = path_parts.index(bucket_name)
+                        if bucket_index < len(path_parts) - 1:
+                            # 獲取 bucket 之後的所有路徑作為 object_key
+                            object_key = '/'.join(path_parts[bucket_index + 1:])
+                        else:
+                            object_key = None
+                    else:
+                        object_key = None
+                
+                # 如果成功提取了 key，就構建 S3 URI
+                if object_key:
+                    image_url = f"s3://{bucket_name}/{object_key}"
+                    logger.info(f"將 HTTP URL 轉換為 S3 URI 格式: {image_url}")
+                else:
+                    logger.warning(f"無法從 URL 解析出 object key: {image_url}")
+            except Exception as e:
+                logger.error(f"解析 S3 URL 時發生錯誤: {e}")
+                logger.warning(f"無法解析 URL: {image_url}, 保留原始 URL")
+        
+        if image_url:
+            logger.info(f"最終使用的圖片URL: {image_url}")
+        else:
+            logger.warning("未找到有效的圖片URL")
         
         # Initialize and run RAG chain with multimodal capability
         logger.info("Initializing RAG chain with multimodal support")
         rag_chain, call_multimodal_model = initialize_multimodal_rag_chain()
         
         # Run text-based RAG with metadata handling
-        logger.info("Running query through text-based RAG chain")
+        logger.info("Running query through multimodal analysis")
         
         # Use run_manager to access source documents with metadata
-        rag_result = rag_chain({"query": formatted_metadata})
-        text_solution = rag_result.get("result", "")
+        # Comment out text-based RAG since we'll always have images
+        # logger.info("Running query through text-based RAG chain")
+        # rag_result = rag_chain({"query": formatted_metadata})
+        # text_solution = rag_result.get("result", "")
         
         # Extract source documents and their metadata (including report_ids)
-        source_docs = rag_result.get("source_documents", [])
+        # source_docs = rag_result.get("source_documents", [])
         source_report_ids = []
         
-        for doc in source_docs:
-            if hasattr(doc, "metadata") and "report_id" in doc.metadata:
-                source_report_ids.append(doc.metadata["report_id"])
+        # for doc in source_docs:
+        #     if hasattr(doc, "metadata") and "report_id" in doc.metadata:
+        #         source_report_ids.append(doc.metadata["report_id"])
         
-        logger.info(f"Retrieved documents with report_ids: {source_report_ids}")
+        # logger.info(f"Retrieved documents with report_ids: {source_report_ids}")
         
         # Add source report IDs to raw_data for future reference 
         raw_data['reference_report_ids'] = source_report_ids
         
-        logger.info(f"Text-based RAG solution generated: {text_solution[:100]}...")
+        # logger.info(f"Text-based RAG solution generated: {text_solution[:100]}...")
         
         # Run multimodal analysis if image is available
         multimodal_solution = None
+        text_solution = ""  # Initialize as empty string since we're not using text-based RAG
+        
         if image_url:
+            # 儲存原始 image_url 以便記錄
+            original_image_url = image_url
+            
             logger.info(f"Running multimodal analysis on image: {image_url}")
             multimodal_solution = call_multimodal_model(formatted_metadata, image_url)
             if multimodal_solution:
                 logger.info(f"Multimodal solution generated: {multimodal_solution[:100]}...")
             else:
-                logger.warning("Failed to generate multimodal solution, falling back to text-based solution")
+                logger.warning("Failed to generate multimodal solution, falling back to default values")
+                # Since we're not using text-based RAG, we'll need a default message if multimodal fails
+                multimodal_solution = "無法分析圖片。建議處理方式：請專業工程師進行現場檢查。風險評估：Medium"
+        else:
+            logger.warning("No image URL provided, cannot perform multimodal analysis")
+            multimodal_solution = "無圖片提供。建議處理方式：請專業工程師進行現場檢查。風險評估：Medium"
         
         # Store in DynamoDB using the raw data extracted from JSON
         logger.info("Storing data in DynamoDB")

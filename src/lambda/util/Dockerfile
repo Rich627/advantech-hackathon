@@ -1,4 +1,4 @@
-FROM public.ecr.aws/lambda/python:3.9
+FROM --platform=linux/amd64 amazon/aws-lambda-python:3.9
 
 COPY requirements.txt .
 RUN pip install -r requirements.txt

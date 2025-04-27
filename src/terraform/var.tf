@@ -22,7 +22,14 @@ variable "bedrock_embedding_model" {
   default     = "amazon.titan-embed-text-v1"
 }
 
+variable "bucket_name" {
+  description = "Name of the S3 bucket for image uploads"
+  type        = string
+  default     = "genai-hackthon-20250426-image-bucket"
+}
+
 variable "email_address" {
   description = "Email address for SNS notifications"
   type        = string
+  default     = "rich.liu627@gmail.com"
 }

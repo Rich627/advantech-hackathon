@@ -1,4 +1,4 @@
-resource "aws_dynamodb_table" "synthesis_reports" {
+resource "aws_dynamodb_table" "reports" {
   name           = "issues"
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "issue_id"

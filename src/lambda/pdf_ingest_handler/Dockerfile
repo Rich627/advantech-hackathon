@@ -1,5 +1,5 @@
-# 官方 Python 3.12 Lambda 基底映像
-FROM public.ecr.aws/lambda/python:3.9
+FROM --platform=linux/amd64 amazon/aws-lambda-python:3.9
+FROM amazon/aws-lambda-python:3.9
 
 # 複製函式碼
 COPY lambda_function.py ${LAMBDA_TASK_ROOT}

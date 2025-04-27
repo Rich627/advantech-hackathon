@@ -1,0 +1,11 @@
+{
+  "id": "ISSUE-001",
+  "timestamp": "2025-04-26 16:19:14",
+  "length": "15.5",
+  "width": "10.2",
+  "position": "mountain",
+  "material": "concrete",
+  "crack_type": "Longitudinal",
+  "crack_location": "A",
+  "image_url": "https://s3.amazonaws.com/your-bucket-name/image/ISSUE-001.jpg"
+}

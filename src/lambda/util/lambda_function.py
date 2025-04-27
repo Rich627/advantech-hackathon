@@ -2,124 +2,127 @@ import boto3
 import json
 import os
 import logging
-from boto3.dynamodb.conditions import Key
 from datetime import datetime
 
-# Configure logging
+# 配置日誌
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Initialize DynamoDB resource
-dynamodb = boto3.resource('dynamodb')
-
-# Risk level priority mapping (higher number = higher priority)
+# 風險級別優先級映射（數字越大優先級越高）
 RISK_PRIORITY = {
-    "High": 3,
-    "Medium": 2,
-    "Low": 1
+    "CRITICAL": 5,
+    "HIGH": 4,
+    "MEDIUM": 3,
+    "LOW": 2,
+    "NEGLIGIBLE": 1
 }
 
-def parse_timestamp(timestamp_str):
+def retrieve_all_issues_from_dynamodb():
     """
-    Parse timestamp string to datetime object for comparison
-    
-    Parameters:
-        timestamp_str: String timestamp in format "YYYY-MM-DD HH:MM:SS"
-    Returns:
-        datetime object or None if parsing fails
+    使用 scan 操作從 DynamoDB 獲取所有 issues
     """
     try:
-        return datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-    except (ValueError, TypeError):
-        # If timestamp is invalid or None, return a very old date for sorting purposes
-        logger.warning(f"Invalid timestamp format: {timestamp_str}")
-        return datetime(1970, 1, 1)
-
-def retrieve_issues_from_dynamodb():
-    """
-    Retrieves all issues from DynamoDB.
-    """
-    try:
+        # 初始化 DynamoDB 資源，明確指定區域
+        region = os.environ.get('AWS_REGION', 'us-west-2')
+        dynamodb = boto3.resource('dynamodb', region_name=region)
+        
+        # 從環境變量獲取表名，如果未設置則使用默認值 'issues'
         table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'issues')
+        logger.info(f"掃描 DynamoDB 表: {table_name}")
+        
+        # 獲取表引用
         table = dynamodb.Table(table_name)
         
-        # Scan the table to get all items
+        # 使用 scan 操作獲取所有項目
         response = table.scan()
         items = response.get('Items', [])
+        logger.info(f"初次掃描獲得 {len(items)} 項")
         
-        # Handle pagination if there are more items
+        # 處理分頁情況（如果結果數量很大）
         while 'LastEvaluatedKey' in response:
+            logger.info("檢測到分頁，繼續掃描...")
             response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
-            items.extend(response.get('Items', []))
+            new_items = response.get('Items', [])
+            logger.info(f"獲取額外的 {len(new_items)} 項")
+            items.extend(new_items)
         
+        logger.info(f"總共獲取 {len(items)} 項")
         return items
     except Exception as e:
-        logger.error(f"Error retrieving items from DynamoDB: {str(e)}")
-        raise
+        logger.error(f"獲取 DynamoDB 項目時出錯: {str(e)}")
+        # 返回空列表而不是抛出異常
+        return []
 
-def sort_issues_by_risk_and_time(issues):
+def sort_issues_by_risk_level(issues):
     """
-    Sorts issues by risk level priority (High > Medium > Low) 
-    and then by timestamp (most recent first).
+    按風險級別優先級排序 issues，然後按日期排序（最新的優先）
     """
     try:
-        # Sort issues based on risk level priority first, then by timestamp
+        # 按風險級別優先級和日期排序
         sorted_issues = sorted(
             issues, 
             key=lambda x: (
-                RISK_PRIORITY.get(x.get('risk_level', 'Low'), 0),  # Risk priority
-                parse_timestamp(x.get('timestamp', '1970-01-01 00:00:00'))  # Timestamp
+                RISK_PRIORITY.get(x.get('risk_level', ''), 0),  # 風險優先級
+                x.get('date', '') or x.get('timestamp', '')     # 日期或時間戳
             ), 
-            reverse=True  # Descending order (highest priority and newest first)
+            reverse=True  # 降序排列（高優先級和最新的優先）
         )
         return sorted_issues
     except Exception as e:
-        logger.error(f"Error sorting issues: {str(e)}")
-        raise
+        logger.error(f"排序 issues 時出錯: {str(e)}")
+        # 如果排序失敗，返回原始列表
+        return issues
 
 def lambda_handler(event, context):
     """
-    Retrieves issues from DynamoDB, sorts them by risk level priority and timestamp,
-    and returns the data in a format suitable for frontend rendering.
+    從 DynamoDB 獲取 issues，按風險級別優先級排序，
+    並返回適合前端渲染的格式數據
     """
     try:
-        # Get all issues
-        all_issues = retrieve_issues_from_dynamodb()
+        logger.info("開始執行 Lambda 獲取 issues")
         
-        # Filter for valid risk levels only
-        valid_risk_levels = ['Low', 'Medium', 'High']
-        filtered_issues = [issue for issue in all_issues if issue.get('risk_level') in valid_risk_levels]
+        # 使用成功的 scan 方法獲取所有 issues
+        all_issues = retrieve_all_issues_from_dynamodb()
+        print(f"util get_all_issues: {all_issues}")
         
-        # Sort all issues by risk level and timestamp
-        sorted_issues = sort_issues_by_risk_and_time(filtered_issues)
+        if not all_issues:
+            logger.warning("未獲取到 issues 或發生錯誤")
+            # 如果沒有找到 issues，返回空列表
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json'
+                },
+                'body': json.dumps({
+                    'issues': [],
+                    'count': 0
+                })
+            }
         
-        # Add CORS headers for frontend access
-        headers = {
-            'Access-Control-Allow-Origin': '*',  # Update this to match your frontend domain
-            'Access-Control-Allow-Methods': 'GET',
-            'Access-Control-Allow-Headers': 'Content-Type',
-            'Content-Type': 'application/json'
-        }
+        # 按風險級別和日期排序所有 issues
+        sorted_issues = sort_issues_by_risk_level(all_issues)
+        logger.info(f"成功排序 {len(sorted_issues)} 項 issues")
         
-        # Construct response
+        # 構建響應，只需包含必要的標頭
         return {
             'statusCode': 200,
-            'headers': headers,
-            'body': json.dumps({
-                'issues': sorted_issues,
-                'count': len(sorted_issues)
-            }, default=str)  # Use default=str to handle non-serializable objects
-        }
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return {
-            'statusCode': 500,
             'headers': {
-                'Access-Control-Allow-Origin': '*',  # Update this to match your frontend domain
                 'Content-Type': 'application/json'
             },
             'body': json.dumps({
-                'error': 'Server error',
+                'issues': sorted_issues,
+                'count': len(sorted_issues)
+            }, default=str)  # 使用 default=str 處理不可序列化的對象
+        }
+    except Exception as e:
+        logger.error(f"意外錯誤: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({
+                'error': '服務器錯誤',
                 'details': str(e)
             })
         }

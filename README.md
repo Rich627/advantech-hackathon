@@ -5,7 +5,7 @@
 
 本專案為2025雲湧智生：臺灣生成式AI應用黑客松競賽的參賽作品，由 Ambassador Avengers Assembly 團隊開發。
 
-[專案簡報 | Project Presentation](assets/F_研華科技_Ambassador Avengers Assembly.pdf)
+![專案簡報 | Project Presentation](/assets/F_研華科技_Ambassador Avengers Assembly.pdf)
 
 ### 背景與痛點
 

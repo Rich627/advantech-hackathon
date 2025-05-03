@@ -2,12 +2,26 @@
 resource "aws_apigatewayv2_api" "main" {
   name          = "hackathon-api"
   protocol_type = "HTTP"
+
+  cors_configuration {
+    allow_origins     = ["*"]
+    allow_methods     = ["GET", "POST", "OPTIONS"]
+    allow_headers     = ["*"]
+    expose_headers    = ["*"]
+    allow_credentials = true
+    max_age           = 7200
+  }
 }
 
 resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.main.id
   name        = "$default"
   auto_deploy = true
+
+  default_route_settings {
+    throttling_burst_limit = 5000
+    throttling_rate_limit  = 5000
+  }
 }
 
 ######################################################
@@ -51,6 +65,12 @@ resource "aws_apigatewayv2_integration" "presigned_url" {
 resource "aws_apigatewayv2_route" "render_frontend" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "GET /render"
+  target    = "integrations/${aws_apigatewayv2_integration.render_frontend.id}"
+}
+
+resource "aws_apigatewayv2_route" "render_frontend_detail" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /render/{run_id}"
   target    = "integrations/${aws_apigatewayv2_integration.render_frontend.id}"
 }
 

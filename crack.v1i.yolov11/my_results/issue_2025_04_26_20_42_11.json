@@ -1,0 +1,11 @@
+{
+  "id": "issue_2025_04_26_20_42_11",
+  "timestamp": "2025-04-26 20:42:11",
+  "length": 32,
+  "width": 13,
+  "position": "mountain",
+  "material": "concrete",
+  "crack_type": "Longitudinal",
+  "crack_location": "L",
+  "image_url": "file://C:\\Users\\maxwell\\Downloads\\crack.v1i.yolov11\\my_results\\issue_2025_04_26_20_42_11.jpg"
+}

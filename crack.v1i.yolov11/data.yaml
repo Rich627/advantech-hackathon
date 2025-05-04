@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 9
+names: ['Annular', 'Diagonal', 'Longitudinal', 'Network', 'Radial', 'Rippled', 'Transverse', 'Turtle-shell patterned', 'objects']
+
+roboflow:
+  workspace: maxwell-dlplb
+  project: crack-qapro
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/maxwell-dlplb/crack-qapro/dataset/1
